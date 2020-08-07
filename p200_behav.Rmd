@@ -1,0 +1,898 @@
+---
+title: "RDoC Behavioral Data Exploration"
+author: "Catherine Walsh"
+date: "3/2/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries}
+library(dplyr)
+library(skimr)
+library(R.matlab)
+library(corrplot)
+library(psych)
+library(ggplot2)
+library(patchwork)
+library(reshape2)
+library(readxl)
+library(lme4)
+
+source('helper_fxns/clean_data.R')
+source('helper_fxns/t_test_df.R')
+```
+
+First, we need to load in the data. We've saved the data individual .RData files earlier, to make our lives easier. Usually we're going to separate out FFA and HPC from our DFR variables, but here we're going to add them into the same datafame just to make our descriptives easier. 
+
+```{r load in data}
+
+load('data/load_effects_DFR.RData')
+load('data/behav.RData')
+load('data/resting_state.RData')
+
+# add in FFA and HPC data to load effects, just to check for differences in groups easily  
+p200_indiv_ROI_DFR_delay <- merge(p200_indiv_ROI_DFR_delay,p200_FFA[,c(1,15,18)],all=TRUE,by="PTID")
+colnames(p200_indiv_ROI_DFR_delay)[30:31] <- c("L_FFA_DELAY_LE", "R_FFA_DELAY_LE")
+p200_indiv_ROI_DFR_delay <- merge(p200_indiv_ROI_DFR_delay,p200_HPC_Ant[,c(1,15,18)],all=TRUE,by="PTID")
+colnames(p200_indiv_ROI_DFR_delay)[32:33] <- c("L_HPC_Ant_DELAY_LE", "R_HPC_Ant_DELAY_LE")
+p200_indiv_ROI_DFR_delay <- merge(p200_indiv_ROI_DFR_delay,p200_HPC_Med[,c(1,15,18)],all=TRUE,by="PTID")
+colnames(p200_indiv_ROI_DFR_delay)[34:35] <- c("L_HPC_Med_DELAY_LE", "R_HPC_Med_DELAY_LE")
+p200_indiv_ROI_DFR_delay <- merge(p200_indiv_ROI_DFR_delay,p200_HPC_Post[,c(1,15,18)],all=TRUE,by="PTID")
+colnames(p200_indiv_ROI_DFR_delay)[36:37] <- c("L_HPC_Post_DELAY_LE", "R_HPC_Post_DELAY_LE")
+
+```
+
+
+```{r create dfs of just cognitive or clinical variables, message=FALSE}
+
+#pull out just clinical variables
+p200_clinical <- dplyr::select(p200_data,PTID,WHO_ST_S32,BPRS_ANX,BPRS_DEP,BPRS_DIST,EDD_TS,ANX_TS,BPRS_TOT,OCI_RT_SUM,K10_Total_Sum,PHQ_SS_SUM,PQ_TotalSum,sum_lev1man)
+
+#pull out just cognitive variables 
+p200_cog <- dplyr::select(p200_data,PTID,ANALYSIS_DIGITSPANFWD_RAW,WMS_SYMS_TOTSCORE,ANALYSIS_DIGITSPANBKW_RAW,ANALYSIS_DIGITSPANSEQ_RAW,SCORING_LETNUMSEQ_RAW,WMS_SA_TOTSCORE,SCORING_MATRIXREASONING_RAW,VOCABULARY_TOTALRAWSCORE,XLCD_K_MAX,XSCAP_MAX_CAPAC,XDFR_EEG_COW_L3,XDFR_MRI_COW_L3,XAOS_PART_SCORE,XDPX_DPRIME,XRISE_PR_ITEM,XRISE_PR_RELAT,XDFR_MRI_ACC_L3, XDFR_MRI_ACC_L1)
+
+p200_cog$XDPX_DPRIME <- as.numeric(p200_cog$XDPX_DPRIME)
+
+#z-score both clinical and cog variables, remove outliers for cognitive but not clinical
+p200_cog_zscores <- clean_data(p200_cog)
+p200_clinical_zscores <- clean_data(p200_clinical,outliers=2)
+
+```
+
+# Demographics 
+
+Looking at proportion of gender, and then treatment groups across scanner. Data were collected on two different scanners, so it's important to note that we have proportionally more care-seeking subjects in the Trio vs Prisma sample, although we have just many more subjects on the Prisma in general. Because we don't have even numbers of subjects across groups, for the set of t-tests in this workbook, we're going to assume unequal variance.  
+
+```{r create df with demographics, message=FALSE, warning=FALSE}
+
+#get demographics 
+p200_demographics <- dplyr::select(p200_data,PTID,X010701_GENDER,PX010101_AGE)
+colnames(p200_demographics) <- c('PTID',"GENDER","AGE")
+
+# GENDER: 1 = male, 2 = female 
+# GROUP: 1 = CS, 2 = NCS 
+# SCANNER: 1 = Trio, 2 = Prisma
+
+# add in scanner, group to df 
+for (suj in seq.int(1,200)){
+  if (p200_demographics$PTID[suj] < 1500 | (p200_demographics$PTID[suj] >= 1600  & p200_demographics$PTID[suj] < 2500)){
+    p200_demographics$SCANNER[suj] <- 1 
+  }else{
+    p200_demographics$SCANNER[suj] <- 2
+  }
+  if (p200_demographics$PTID[suj] < 2000){
+    p200_demographics$GROUP[suj] <- 1 
+  }else{
+    p200_demographics$GROUP[suj] <- 2
+  }
+}
+
+```
+
+```{r visualize demographics, warning = FALSE}
+
+df.gender <- data.frame(
+  gender = c("Male", "Female"), 
+  percent = c(sum(p200_demographics$GENDER==1)/199*100, sum(p200_demographics$GENDER==2)/199*100)
+)
+
+df.scanner <- data.frame(
+  scanner = c("Trio", "Prisma"),
+  percent = c(sum(p200_demographics$SCANNER==1)/200*100, sum(p200_demographics$SCANNER==2)/200*100)
+)
+
+df.treat <- data.frame(
+  group = c("CS", "NCS"),
+  percent = c(sum(p200_demographics$GROUP==1)/200*100, sum(p200_demographics$GROUP==2)/200*100)
+)
+
+df.scanner.treat <- data.frame(
+  scanner = c("Trio", "Trio", "Prisma", "Prisma"),
+  group = c("CS", "NCS", "CS", "NCS"), 
+  percent = c(sum(p200_demographics$GROUP==1 & p200_demographics$SCANNER==1)/200*100, sum(p200_demographics$GROUP==1 & p200_demographics$SCANNER==2)/200*100, sum(p200_demographics$GROUP==2 & p200_demographics$SCANNER==1)/200*100, sum(p200_demographics$GROUP==2 & p200_demographics$SCANNER==2)/200*100)
+)
+
+bp.gender<- ggplot(df.gender, aes(x="", y=percent, fill=gender))+
+  geom_bar(width = 1, stat = "identity")+
+  xlab("Gender") + 
+  ggtitle("Distribution of Genders")
+
+bp.scanner<- ggplot(df.scanner, aes(x="", y=percent, fill=scanner))+
+  geom_bar(width = 1, stat = "identity")
+
+bp.treat<- ggplot(df.treat, aes(x="", y=percent, fill=group))+
+  geom_bar(width = 1, stat = "identity")
+
+bp.scanner.treat <- ggplot(df.scanner.treat, aes(x=scanner, y=percent, fill=group))+
+  geom_bar(width = .8, stat = "identity") +
+  ggtitle("Treatment group x scanner")
+
+hist.age <- ggplot(p200_demographics, aes(x=AGE))+
+  geom_histogram(binwidth=1.1,color="black", fill="white")
+
+(bp.gender | bp.scanner.treat) / hist.age
+
+```
+
+Need to remember to ask Jesse about whether different examples of same type of measures should be corrected for multiple comparisons or if they're considered independent variables. 
+
+# Describe Cognitive Variables 
+
+## All Subjects
+
+```{r describe cog dataset}
+
+skim(p200_cog_zscores)
+
+```
+
+## Gender 
+
+```{r describe gender for cog}
+
+# males
+skim(p200_cog %>% filter(p200_demographics$GENDER==1))
+
+# females
+skim(p200_cog %>% filter(p200_demographics$GENDER==2))
+
+```
+
+ANALYSIS_DIGITSPANSEQ_RAW is the only test that differs based on gender at p < 0.05, uncorrected, with males > females. 
+
+```{r test differences for gender, cog}
+
+# one subject did not report gender --> remove this subject 
+p200_demographics_gender<-p200_demographics[p200_demographics$GENDER <3,]
+
+p200_cog_gender <- p200_cog_zscores[p200_cog_zscores$PTID %in% p200_demographics_gender$PTID,]
+
+t_test_df(p200_cog_gender, p200_demographics_gender$GENDER, "Gender")
+
+```
+
+## Treatment Group 
+
+
+```{r describe treatment group for cog}
+
+# CS
+skim(p200_cog %>% filter(p200_demographics$GROUP==1))
+
+# NCS 
+skim(p200_cog %>% filter(p200_demographics$GROUP==2))
+
+```
+
+WMS_SYMS_TOTSCORE, ANALYSIS_DIGITSPANSEQ_RAW, SCORING_LETNUMSEQ_RAW, WMS_SA_TOTSCORE, XLCD_K_MAX, XDPX_DPRIME all show differences across treatment group. The non-care seeking group had higher scores on all of these measures. 
+
+```{r t test cog treatment}
+
+t_test_df(p200_cog, p200_demographics$GROUP, "Treatment Group")
+
+```
+
+## Scanner 
+
+```{r describe by scanner for cog}
+
+# Trio
+skim(p200_cog %>% filter(p200_demographics$SCANNER==1))
+
+# Prisma
+skim(p200_cog %>% filter(p200_demographics$SCANNER==2))
+
+```
+
+ANALYSIS_DIGITSPANFWD_RAW and ANALYSIS_DIGITSPANSEQ_RAW showed signifcant differences at p < 0.05, uncorrected, with Trio > Prisma. 
+
+```{r t test cog scanner}
+
+t_test_df(p200_cog, p200_demographics$SCANNER, "Scanner")
+
+```
+
+## Correlation with Age 
+
+ANALYSIS_DIGITSPANFWD_RAW (+), SCORING_LETNUMSEQ_RAW (-), WMS_SA_TOTSCORE (-), VOCABULARY_TOTALRAWSCORE (-), XDFR_MRI_COW_L3 (-), XRISE_PR_ITEM all (-) show a significant correlation with age at p < 0.05, uncorrected.  
+
+```{r correlate age with cognitive measures}
+
+#cognitive
+age_cog_corr <- matrix(nrow = 2, ncol = 16)
+
+for (idx in seq.int(2,17)){
+  temp <- cor.test(p200_demographics$AGE,p200_cog_zscores[,idx],use = "pairwise.complete.obs")
+  age_cog_corr[1,idx-1] <- temp$estimate
+  age_cog_corr[2,idx-2] <- temp$p.value
+}
+
+colnames(age_cog_corr) <- colnames(p200_cog_zscores)[2:17]
+rownames(age_cog_corr) <- c("r value","p value")
+
+age_cog_corr
+
+``` 
+
+# Describe Clinical Variables 
+
+## Overall 
+
+```{r describe clinical dataset}
+
+skim(p200_clinical_zscores)
+
+```
+
+## Gender 
+
+```{r describe gender for clinical}
+
+# males
+skim(p200_clinical %>% filter(p200_demographics$GENDER==1))
+
+# females
+skim(p200_clinical %>% filter(p200_demographics$GENDER==2))
+
+```
+
+ANX_TS showed a just barerly not significant difference between genders, with females having higher scores than males. 
+
+```{r t test clinical gender}
+
+p200_clinical_gender <- p200_clinical_zscores[p200_clinical_zscores$PTID %in% p200_demographics_gender$PTID,]
+t_test_df(p200_clinical_gender, p200_demographics_gender$GENDER, "Gender", p200_demographics_gender$SCANNER)
+
+```
+
+## Treatment Group
+
+```{r describe treatment group for clinical}
+
+# CS
+skim(p200_clinical %>% filter(p200_demographics$GROUP==1))
+
+# NCS
+skim(p200_clinical %>% filter(p200_demographics$GROUP==2))
+
+```
+
+All measures were significantly different across groups, with higher scores in the CS group. Do need to take into account that we just have more CS (n = 117) than NCS (n = 53) subjects. 
+
+```{r t test clinical treatment }
+
+t_test_df(p200_clinical, p200_demographics$GROUP, "Treatment Group",p200_demographics$SCANNER)
+
+```
+
+## Scanner Group
+
+```{r describe scanner for clinical }
+
+skim(p200_clinical %>% filter(p200_demographics$SCANNER==1))
+skim(p200_clinical %>% filter(p200_demographics$SCANNER==2))
+
+```
+
+BPRS_TOT is the only variable that showed difference across scanner groups, with higher values in Trio vs Prisma. Again, need to consider distribution of subjects across scanner. There are more CS subjects on the Trio scanner. 
+
+```{r t test clinical scanner}
+
+t_test_df(p200_clinical, p200_demographics$SCANNER, "Treatment Group")
+
+```
+
+## Correlate age with clinical measures
+
+No measures had a significant correlation with age. 
+
+```{r correlate age with clinical measures}
+
+#clinical
+age_clinical_corr <- matrix(nrow = 2, ncol= 12)
+for (idx in seq.int(2,13)){
+  temp <- cor.test(p200_demographics$AGE,p200_clinical_zscores[,idx],use="pairwise.complete.obs")
+  age_clinical_corr[1,idx-1] <- temp$estimate
+  age_clinical_corr[2,idx-1] <- temp$p.value
+}
+
+colnames(age_clinical_corr) <- colnames(p200_clinical_zscores)[2:13]
+rownames(age_clinical_corr) <- c("r value","p value")
+
+age_clinical_corr
+
+```
+
+# Describe Load Effects 
+
+## Overall
+
+```{r describe load effects}
+
+skim(p200_indiv_ROI_DFR_delay)
+
+```
+
+## Gender 
+
+```{r describe gender for load effects}
+
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$GENDER==1))
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$GENDER==2))
+
+```
+
+No differences across gender. 
+
+```{r test differences for gender, load effects}
+
+indiv_load_effects_gender <- p200_indiv_ROI_DFR_delay[ p200_indiv_ROI_DFR_delay$PTID %in% p200_demographics_gender$PTID,]
+
+t_test_df(indiv_load_effects_gender, p200_demographics_gender[p200_demographics_gender$PTID %in% indiv_load_effects_gender$PTID,]$GENDER, "Gender", p200_demographics_gender[p200_demographics_gender$PTID %in% indiv_load_effects_gender$PTID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+
+```{r describe treatment group for load effects}
+
+
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$GROUP==1))
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$GROUP==2))
+
+```
+
+No difference between treatment groups. 
+
+```{r t test LE/treatment }
+
+t_test_df(p200_indiv_ROI_DFR_delay, p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$GROUP, "Treatment Group",p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$SCANNER)
+
+```
+
+## Scanner 
+
+```{r describe by scanner for load effects}
+
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$SCANNER==1))
+skim(p200_indiv_ROI_DFR_delay %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$SCANNER==2))
+
+``` 
+
+DFR_L_aMFG, DFR_R_dlPFC, DFR_ROIs, NS_L_dMFG, NS_R_cerebellum show differences across scanner, with increased load effects in Trio vs Prisma. Good to keep note, but again, consider the differences in care group. We're probably okay here, since the only thing that showed differences across group is in the R FFA, but there still could be an interaction, so we should be mindful of this. 
+
+```{r t test scanner LE}
+
+t_test_df(p200_indiv_ROI_DFR_delay, p200_demographics[p200_demographics$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]$SCANNER, "Scanner")
+
+```
+
+# Describe Resting State Functional Connectivity 
+
+## Overall
+
+```{r all data fxl conn}
+
+skim(p200_RS)
+
+```
+
+## Gender
+
+```{r RS by gender}
+
+# males
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$GENDER==1))
+
+# females
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$GENDER==2))
+
+```
+
+CinguloOperc/Visual (F>M) only significant difference. 
+
+```{r t test RS by gender}
+
+t_test_df(p200_RS[p200_RS$PTID %in% p200_demographics_gender$PTID,], p200_demographics_gender[p200_demographics_gender$PTID %in% p200_RS$PTID,]$GENDER, "Gender", p200_demographics_gender[p200_demographics_gender$PTID %in% p200_RS$PTID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+```{r RS by care group}
+
+# CS
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$GROUP==1))
+
+# NCS
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$GROUP==2))
+
+```
+
+VentralAttn/Default, DorsalAttn/Visual, VentralAttn/DorsalAttn, VentralAttn/FrontoParietal (CS > NCS).  
+
+```{r t test RS by care}
+
+t_test_df(p200_RS[p200_RS$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$GROUP, "Treatment Group",p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$SCANNER)
+
+```
+
+## Scanner
+
+```{r RS by scanner}
+
+# Trio
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$SCANNER==1))
+
+# Prisma
+skim(p200_RS %>% filter(p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$SCANNER==2))
+
+```
+
+Default/Default, FrontoParietal/Default, Visual/Visual, CinguloOperc/Visual, VentralAttn/Default, DorsalAttn/Visual, VentralAttn/Visual, CinguloOperc/CinguloOperc, DorsalAttn/DorsalAttn, FrontoParietal/DorsalAttn, FrontoParietal/FrontoParietal, VentralAttn/FrontoParietal all show differences; Prisma > Trio
+
+```{r t test RS by scanner}
+
+t_test_df(p200_RS[p200_RS$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_RS$PTID,]$SCANNER, "Scanner")
+
+```
+
+# Graph Theory Measures 
+
+## Overall
+
+```{r all data BCT}
+
+skim(p200_BCT_forCorr)
+
+```
+
+## Gender
+
+```{r BCT by gender}
+
+# males
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$GENDER==1))
+
+# females
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$GENDER==2))
+
+```
+
+Nothing significant
+
+```{r t test BCT by gender}
+
+t_test_df(p200_BCT_forCorr[p200_BCT_forCorr$PTID %in% p200_demographics_gender$PTID,], p200_demographics_gender[p200_demographics_gender$PTID %in% p200_BCT_forCorr$PTID,]$GENDER, "Gender",p200_demographics_gender[p200_demographics_gender$PTID %in% p200_BCT_forCorr$PTID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+```{r BCT by care group}
+
+# CS
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$GROUP==1))
+
+# NCS
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$GROUP==2))
+
+```
+
+Nothing significant.
+
+```{r t test BCT by care}
+
+t_test_df(p200_BCT_forCorr[p200_BCT_forCorr$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$GROUP, "Treatment Group",p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$SCANNER)
+
+```
+
+## Scanner
+
+```{r BCT by scanner}
+
+# Trio
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$SCANNER==1))
+
+# Prisma
+skim(p200_BCT_forCorr %>% filter(p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$SCANNER==2))
+
+```
+
+Nothing significant.
+
+```{r t test BCT by scanner}
+
+t_test_df(p200_BCT_forCorr[p200_BCT_forCorr$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_BCT_forCorr$PTID,]$SCANNER, "Scanner")
+
+```
+
+# Individual Networks Graph Theory
+
+## Overall
+
+```{r all data indiv BCT}
+
+skim(p200_indiv_network_ParticCoeff)
+
+```
+
+## Gender
+
+```{r indiv BCT by gender}
+
+# males
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GENDER==1))
+
+# females
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GENDER==2))
+
+```
+
+Nothing significant.
+
+```{r t test indiv BCT by gender}
+
+t_test_df(p200_indiv_network_ParticCoeff[p200_indiv_network_ParticCoeff$PTID %in% p200_demographics_gender$PTID,], p200_demographics_gender[p200_demographics_gender$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GENDER, "Gender",p200_demographics_gender[p200_demographics_gender$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+```{r indiv BCT by care group}
+
+# CS
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GROUP==1))
+
+# NCS
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GROUP==2))
+
+```
+
+Nothing significant
+
+```{r t test indiv BCT by care}
+
+t_test_df(p200_indiv_network_ParticCoeff[p200_indiv_network_ParticCoeff$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$GROUP, "Treatment Group", p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$SCANNER)
+
+```
+
+## Scanner
+
+```{r indiv BCT by scanner}
+
+# Trio
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$SCANNER==1))
+
+# Prisma
+skim(p200_indiv_network_ParticCoeff %>% filter(p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$SCANNER==2))
+
+```
+
+Nothing significant.
+
+```{r t test indiv BCT by scanner}
+
+t_test_df(p200_indiv_network_ParticCoeff[p200_indiv_network_ParticCoeff$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% p200_indiv_network_ParticCoeff$PTID,]$SCANNER, "Scanner")
+
+```
+
+# Cortical thickness
+
+```{r load structural measures}
+
+load("data/structural_measures.RData")
+
+colnames(aparc_LH_MTHICK)[2:37] <- paste(colnames(aparc_LH_MTHICK[2:37]),"LH", sep = "_")
+colnames(aparc_RH_MTHICK)[2:37] <- paste(colnames(aparc_RH_MTHICK[2:37]),"RH", sep = "_")
+
+# just for this check, we're going to put everything in one dataframe to make our lives easier
+all_cortical_thick <- merge(aparc_LH_MTHICK,aparc_RH_MTHICK)
+all_cortical_thick <- merge(all_cortical_thick, p200_DFR_fullMask_cortical_thickness, by.x="ID", by.y="PTID")
+
+```
+
+## Overall
+
+```{r overall cortical thickness}
+
+skim(all_cortical_thick)
+
+```
+
+## Gender 
+
+```{r cortical thickness by gender}
+
+# males
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$GENDER==1))
+
+# females
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$GENDER==2))
+
+```
+
+MTHICK_White_Surface_Total_Area_LH (M >F), MTHICK_inferiorparietal_LH (F > M), MTHICK_superiorparietal_LH (F > M), MTHICK_supramarginal_LH (F > M), MTHICK_transversetemporal_LH (F > M), MTHICK_White_Surface_Total_Area_RH (M > F), MTHICK_inferiortemporal_RH (M > F), MTHICK_insula_RH (M > F), MTHICK_superiorparietal_RH (F > M) MTHICK_temporalpole_RH (M > F), Delay_RH (F > M), Delay_LH (F > M) 
+
+```{r t test cortical thickness by gender}
+
+t_test_df(all_cortical_thick[all_cortical_thick$ID %in% p200_demographics_gender$PTID,], p200_demographics_gender[p200_demographics_gender$PTID %in% all_cortical_thick$ID,]$GENDER, "Gender", p200_demographics_gender[p200_demographics_gender$PTID %in% all_cortical_thick$ID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+```{r cortical thickness by care group}
+
+# CS
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$GROUP==1))
+
+# NCS
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$GROUP==2))
+
+```
+
+MTHICK_White_Surface_Total_Area_LH (NCS > CS), MTHICK_bankssts_LH (NCS > CS), MTHICK_White_Surface_Total_Area_RH (NCS > CS),  MTHICK_isthmuscingulate_RH (CS > NCS), MTHICK_superiortemporal_RH (NCS > CS). 
+
+```{r t test cortical thickness by care}
+
+t_test_df(all_cortical_thick[all_cortical_thick$ID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$GROUP, "Treatment Group", p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$SCANNER)
+
+```
+
+## Scanner
+
+```{r cortical thickness by scanner}
+
+# Trio
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$SCANNER==1))
+
+# Prisma
+skim(all_cortical_thick %>% filter(p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$SCANNER==2))
+
+```
+
+MTHICK_lingual_LH (Prisma > Trio), MTHICK_rostralanteriorcingulate_RH (Prisma > Trio)
+
+```{r t test cortical thickness by scanner}
+
+t_test_df(all_cortical_thick[all_cortical_thick$ID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% all_cortical_thick$ID,]$SCANNER, "Scanner")
+
+```
+
+# FA Data 
+
+## Overall
+
+```{r overall FA}
+
+skim(FA_Data)
+
+```
+
+## Gender 
+
+```{r FA by gender}
+
+# males
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$GENDER==1))
+
+# females
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$GENDER==2))
+
+```
+
+Cingulum..cingulate.gyrus..L, Cingulum..cingulate.gyrus..R, Cingulum..hippocampus..L, Cingulum..hippocampus..R (all M > F)
+
+```{r t test FA by gender}
+
+t_test_df(FA_Data[FA_Data$PTID %in% p200_demographics_gender$PTID,], p200_demographics_gender[p200_demographics_gender$PTID %in% FA_Data$PTID,]$GENDER, "Gender",  p200_demographics_gender[p200_demographics_gender$PTID %in% FA_Data$PTID,]$SCANNER)
+
+```
+
+## Treatment Group 
+
+```{r FA by care group}
+
+# CS
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$GROUP==1))
+
+# NCS
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$GROUP==2))
+
+```
+
+Anterior.thalamic.radiation.L, Anterior.thalamic.radiation.R, Uncinate.fasciculus.R  (all NCS > CS)
+
+```{r t test FA by care}
+
+t_test_df(FA_Data[FA_Data$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$GROUP, "Treatment Group", p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$SCANNER)
+
+```
+
+## Scanner
+
+```{r FA by scanner}
+
+# Trio
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$SCANNER==1))
+
+# Prisma
+skim(FA_Data %>% filter(p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$SCANNER==2))
+
+```
+
+Anterior.thalamic.radiation.L, Anterior.thalamic.radiation.R, Corticospinal.tract.L, Cingulum..cingulate.gyrus..L, Cingulum..hippocampus..L, Forceps.major, Forceps.minor, Inferior.fronto.occipital.fasciculus.L, Inferior.fronto.occipital.fasciculus.R, Inferior.longitudinal.fasciculus.L, Superior.longitudinal.fasciculus.L, Superior.longitudinal.fasciculus.R, Uncinate.fasciculus.L, Uncinate.fasciculus.R, Global.FA (all Trio > Prisma)
+
+```{r t test FA by scanner}
+
+t_test_df(FA_Data[FA_Data$PTID %in% p200_demographics$PTID,], p200_demographics[p200_demographics$PTID %in% FA_Data$PTID,]$SCANNER, "Scanner")
+
+```
+
+# Creating Cognitive Constructs 
+
+First, we want to look at how the cognitive variables correlate with each other (thresholded at p < 0.01), and their reliability. Values below the diagonal are uncorrected, values above the diagonal are corrected for multiple comparsons using a Holm correction. 
+
+
+```{r correlations among cognitive variables}
+
+# define info to make corrplot easier to read 
+labels <- c("Digits Fwd", "Symbol Span", "Digits Bkwd", "Digit Seq", "Letter/Number Seq", "Spatial Addition", "Matrix Reasoning", "Vocab", "LCD", "SCAP", "DFR EEG L3", "DFR MRI L3", "AOS", "DPX", "RISE item", "RISE relat")
+col <- colorRampPalette(c("dark blue","light blue", "light green", "yellow", "orange", "red"))(100) 
+
+
+# ignore PTID
+behav_corr <- corr.test(p200_cog_zscores[2:17])
+colnames(behav_corr$r) <- labels
+rownames(behav_corr$r) <- labels
+corrplot(behav_corr$r, p.mat = behav_corr$p, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.01, cl.lim = c(0,1), order="hclust")
+
+psych::alpha(p200_cog_zscores[2:17])
+
+```
+
+The cognitive variables have generally high correlations and reliability among each other, so we're going to create constructs that will be easier to work with in future analyses. Combining multiple cognitive tests that measure WM into one construct allows us to maximize the signal for each subject and minimize the noise.
+
+We're trying a variety of different combinations for constructs. One distinction is the simple/complex span division - we considered any task that just included maintenance, while complex span also included manipulation. In the end, we found the most reliable results with including all tasks in an omnibus span measure. In addition, we also had to think about whether/how to include the behavior from the DFR task in the fMRI and EEG. We want to be able to include it in some way, because it's giving us relevant information, but we also don't want to double dip on information. In the end, we decided on including the accuracy from the EEG session but not the fMRI one, so we have an omnibus span construct that is independent of anything in the fMRI that we can use to relate to other fMRI measures. 
+
+We also created a variety of other cognitive constructs, including goal maintenance/interference control, long term memory and intelligence. Intelligence has been shown to correlate with WM, making it a theoretically interesting investigation. The others, while having interesting theoretical implications, have technical constraints because they don't have many measures going into them (ex: GM/IC is just the DPX task, and LMT is just two different facets of the RISE task). 
+
+```{r create construct variables}
+
+simple_span <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","XDFR_EEG_COW_L3","XDFR_MRI_COW_L3")]
+
+simple_span_no_DFR_MRI <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","XDFR_EEG_COW_L3")]
+simple_span_no_DFR <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC")]
+
+complex_span <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANBKW_RAW","ANALYSIS_DIGITSPANSEQ_RAW","SCORING_LETNUMSEQ_RAW","WMS_SA_TOTSCORE","XAOS_PART_SCORE")]
+
+omnibus_span <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","XDFR_EEG_COW_L3","ANALYSIS_DIGITSPANBKW_RAW","ANALYSIS_DIGITSPANSEQ_RAW","SCORING_LETNUMSEQ_RAW","WMS_SA_TOTSCORE","XAOS_PART_SCORE")]
+omnibus_span_no_DFR_MRI <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","XDFR_EEG_COW_L3","ANALYSIS_DIGITSPANBKW_RAW","ANALYSIS_DIGITSPANSEQ_RAW","SCORING_LETNUMSEQ_RAW","WMS_SA_TOTSCORE","XAOS_PART_SCORE")]
+omnibus_span_no_DFR <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","ANALYSIS_DIGITSPANBKW_RAW","ANALYSIS_DIGITSPANSEQ_RAW","SCORING_LETNUMSEQ_RAW","WMS_SA_TOTSCORE","XAOS_PART_SCORE")]
+
+GM_IC <- p200_cog_zscores[,c("XDPX_DPRIME")]
+
+LTM <- p200_cog_zscores[,c("XRISE_PR_ITEM","XRISE_PR_RELAT")]
+
+intelligence <- p200_cog_zscores[,c("SCORING_MATRIXREASONING_RAW","VOCABULARY_TOTALRAWSCORE")]
+
+simple_span <- rowMeans(simple_span, na.rm = TRUE)
+simple_span_no_DFR <- rowMeans(simple_span_no_DFR, na.rm = TRUE)
+simple_span_no_DFR_MRI <- rowMeans(simple_span_no_DFR_MRI, na.rm = TRUE)
+
+omnibus_span <- rowMeans(omnibus_span,na.rm=TRUE)
+omnibus_span_no_DFR <- rowMeans(omnibus_span_no_DFR,na.rm=TRUE)
+omnibus_span_no_DFR_MRI <- rowMeans(omnibus_span_no_DFR_MRI,na.rm=TRUE)
+
+
+complex_span <- rowMeans(complex_span,na.rm=TRUE)
+LTM <- rowMeans(LTM,na.rm = TRUE)
+intelligence <- rowMeans(intelligence,na.rm = TRUE)
+
+construct_vars <- data.frame(p200_cog$PTID, simple_span_no_DFR_MRI,complex_span,GM_IC,LTM,intelligence)
+colnames(construct_vars)[1] <- "PTID"
+
+construct_vars_omnibus <- cbind(construct_vars,omnibus_span_no_DFR_MRI,omnibus_span_no_DFR)
+constructs_fMRI <- construct_vars_omnibus[construct_vars_omnibus$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]
+
+
+```
+
+```{r save constructs, eval=FALSE}
+
+#again, this only has to happen once -- we just want to make sure we have access to the new behavioral variables we've been making
+
+save(list = c("p200_data", "p200_cog", "p200_cog_zscores", "p200_clinical", "p200_clinical_zscores", "p200_demographics", "construct_vars", "construct_vars_omnibus","constructs_fMRI"), file = 'data/behav.RData')
+
+```
+
+# Describing Constructs
+
+Now that we've created these constructs, let's do some of the same descriptives that we did for the individual variables, with a little more detail (since there are fewer of them, and they're going to be our variables of interest). 
+
+## Correlation Between Constructs 
+
+Generally, constructs have high correlation between each other. Good to note that span correlates with intelligence, which is something that we see in the literature. 
+
+```{r correlation between constructs}
+
+construct_corr <- corr.test(construct_vars_omnibus[,2:7])
+colnames(construct_corr$r) <- c("Simple Span", "Complex Span", "GM/IC", "LTM", "Intelligence", "Omnibus Span")
+rownames(construct_corr$r) <- c("Simple Span", "Complex Span", "GM/IC", "LTM", "Intelligence", "Omnibus Span")
+corrplot(construct_corr$r, p.mat = construct_corr$p, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.01, cl.lim = c(0,1))
+
+```
+
+```{r scatter plots}
+
+pairs.panels(construct_vars_omnibus[2:7], density=TRUE)
+
+```
+
+
+## Describe Construct Variables
+
+```{r distribution of variables, warning = FALSE}
+
+# get code to do raincloud plots 
+source("~/Documents/Code/RainCloudPlots/tutorial_R/R_rainclouds.R")
+
+# set up data to plot 
+construct_vars_omnibus <- merge(construct_vars_omnibus, p200_demographics, by = "PTID")
+plot_data <- melt(construct_vars_omnibus, id.vars = c("PTID", "GENDER", "AGE", "SCANNER", "GROUP"))
+plot_data$GROUP <- factor(plot_data$GROUP, labels = c("CS", "NCS"))
+
+
+ggplot(plot_data,aes(x=variable,y=value))+
+  geom_flat_violin(aes(fill=GROUP),position = position_nudge(x = .2, y = 0), adjust = 2,alpha = .5, colour = NA)+
+  geom_point(aes(color = GROUP), position = position_jitter(width = .15), size = .25)+
+  ylab('Score')+
+  xlab('Measure')+
+  coord_flip()+
+  guides(fill = FALSE)+
+  ggtitle("Distribution of cognitive constructs")
+
+```
+
+Difference between complex span across scanners (but lose tthis difference when take into account group), difference between complex span across gender (male > female); simple span, complex span and omnibus span across treatment group (NCS > CS).
+
+```{r t test constructs across groups}
+
+t_test_df(construct_vars_omnibus[,1:7], construct_vars_omnibus$GROUP, "Treatment Group",construct_vars_omnibus$SCANNER)
+t_test_df(construct_vars_omnibus[c(1:91,93:200),1:7], construct_vars_omnibus$GENDER[c(1:91,93:200)], "Gender",construct_vars_omnibus$SCANNER[c(1:91,93:200)])
+t_test_df(construct_vars_omnibus[,1:7], construct_vars_omnibus$SCANNER, "Scanner", construct_vars_omnibus$GROUP)
+
+
+```
+
+
+
+

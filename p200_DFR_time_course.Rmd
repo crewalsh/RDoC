@@ -1,0 +1,214 @@
+---
+title: "DFR Split Time Course"
+author: "Catherine Walsh"
+date: "4/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We've repeated all of our analyses using DFR split groups, so now, let's do it with the time course data as well. 
+
+```{r load libraries, data and custom functions}
+
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(psych)
+library(patchwork)
+library(R.matlab)
+
+load('data/behav.RData')
+load('data/DFR_split_groups_info.RData')
+
+source('helper_fxns/load_in_ROI.R')
+source('helper_fxns/split_TC_into_groups.R')
+source('helper_fxns/create_TC_for_plot.R')
+source('helper_fxns/load_effect_corr.R')
+source('helper_fxns/prep_TC_corr_for_plot.R')
+source('helper_fxns/plot_TC_corrs_indiv_ROIs.R')
+
+# these times are based on when the actual cues were on the screen 
+rects <- data.frame(xstart=c(0,2.5,10),xend=c(2.5,10,12),col = factor(c("cue","delay","probe"),levels=c("cue","delay","probe")))
+
+# adjust for hemodynamic delay 
+rects$xstart <- rects$xstart+5
+rects$xend <- rects$xend+5
+
+```
+
+```{r load in time course data}
+
+basepath <- "~/Documents/UCLA/Research/RDoC/TimeCourseData/"
+
+# delay period 
+
+delay_ROI_list <- c("L_dlPFC", "L_aMFG", "L_dMFG", "L_IPS", "L_preSMA", "R_dlPFC", "R_dMFG",
+                    "R_IPS", "R_medParietal")
+
+delay_TCs <- load_in_ROI(basepath, delay_ROI_list)
+
+# cue 
+
+cue_ROI_list <- c("cue_R_preSMA", "cue_R_occipital", "cue_R_MFG", "cue_R_IPS", "cue_R_insula", 
+                  "cue_R_FEF", "cue_L_occipital", "cue_L_IPS", "cue_L_insula", "cue_L_FEF")
+
+cue_TCs <- load_in_ROI(basepath, cue_ROI_list)
+
+# probe 
+
+probe_ROI_list <- c("probe_R_OFC", "probe_R_insula", "probe_R_dlPFC", "probe_L_IPS", "probe_L_insula",
+                    "probe_L_dlPFC", "probe_L_aMFG", "probe_dmPFC")
+
+probe_TCs <- load_in_ROI(basepath, probe_ROI_list)
+
+```
+
+```{r split TCs into DFR groups}
+
+allSubjs <- constructs_fMRI$PTID
+
+cue_TC_groups <- split_TC_into_groups(cue_TCs,DFR_groups,allSubjs)
+delay_TC_groups <- split_TC_into_groups(delay_TCs,DFR_groups,allSubjs)
+probe_TC_groups <- split_TC_into_groups(probe_TCs,DFR_groups,allSubjs)
+
+```
+
+```{r prep TCs for plotting}
+
+cue_TC_for_plot <- create_TC_for_plot(cue_TC_groups)
+delay_TC_for_plot <- create_TC_for_plot(delay_TC_groups)
+probe_TC_for_plot <- create_TC_for_plot(probe_TC_groups)
+
+```
+
+# Plot time course for DFR groups
+
+## L1 vs L3
+
+### Cue 
+
+```{r plot TC by DFR group for cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dashed")+
+          #geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"), aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=0.2)+
+          #geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"), aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=0.2)+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(cue_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+
+```
+
+### Delay
+
+```{r plot TC by DFR group for delay}
+
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dashed")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(delay_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+
+```
+
+### Probe
+
+```{r plot TC by DFR group for probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dashed")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(probe_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+```
+
+## Load Effects 
+
+### Cue
+
+Similarly to the WM split groups, the cue period regions are strongly active during cue period, but less so elsewhere. Some of the regions (R/L insula, R preSMA) also show a smaller peak around the probe period. 
+
+However, differently from the split based on WM, we're seeing a linear increase in activity during the cue period with performance, such that high performing subjects had the highest activity, then medium performing, then low performing. 
+
+```{r load effects - cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(cue_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+### Delay
+
+During the delay active regions, it's a linear relationship in the cue period again, so that high performing subjects have the highest activity, then medium performing, then low performing. Low performing subjects tend to have a very small load effect. During the delay period, most regions show the same linear relationship. However, L preSMA and L dMFG seem to show a slight inverted U-shaped relationship.  
+
+```{r load effects - delay}
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(delay_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+
+```
+
+
+
+### Probe 
+
+Similar to the cue period regions, these regions are showing peaks in the cue and probe periods, with dips during the delay period. Again, like the other regions, there seem to be a linear relationship between performance and activity. In the L insula and dmPFC, however, we do see the inverted U-shape relationship come out again during the delay period. There really isn't much of any load effects during the delay period at all, seems to be driven in part by the fact that there isn't really much activation at all during those periods. 
+
+```{r load effects - probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(probe_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```

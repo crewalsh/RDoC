@@ -1,0 +1,3113 @@
+---
+title: "Inter-trial Similarity"
+author: "Catherine Walsh"
+date: "4/23/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The motivation for this analysis was to look at the stability of the representations of the stimuli for each trial. Theoretically, while there is only one (or very few) way to do the task correctly, there are many ways to do it incorrectly. The stability of the multivariate representations of each trial might give us insight into how each subject is doing the task, which might have relationships with behavioral or clinical measures. 
+
+This analysis was accomplished first by calculating inter-trial similarity: a multivariate pattern was extracted for each trial for each subject from either a bilateral fusiform mask, or a DFR delay load effect mask. Then, trials were broken into correct and incorrect for low and high load trials. From there, each trial was corrrelated to a subject specific "correct trial" template. For incorrect trials, each trial was simply correlated to the mean of all the correct trials. For each correct trial, each trial was correlated to the mean of all correct trials excluding itself. 
+
+This resulted in each subject having 64 correlations - one for each trial. We then averaged over trials for four separate conditions - high vs low load, and correct vs incorrect. Thus, each subject ended up with four correlations at each TR, one for each of these conditions, which is what will be used in the present analysis. There should be a grain of caution taken with the low load incorrect trials, because subjects had a low number of trials for this condition. 
+
+```{r load libraries, custom functions and data}
+
+library(dplyr)
+library(psych)
+library(ggplot2)
+library(reshape2)
+library(rmatio)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+
+load('data/behav.RData')
+load('data/DFR_split_groups_info.RData')
+load('data/split_groups_info.RData')
+
+# remove outlier from BPRS 
+p200_clinical$BPRS_TOT[27] <- NA
+p200_data$BPRS_TOT[27] <- NA
+
+source('helper_fxns/split_into_groups.R')
+
+se <- function(x) {
+  sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
+}
+
+```
+
+# Fusiform
+
+```{r load in matlab data - fusiform}
+
+similarity_temp <- read.mat('data/intertrial_similarity_fusiform.mat')
+
+for (i in seq.int(14,17)){
+  similarity_temp[[i]] <- data.frame(similarity_temp[[i]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  similarity_temp[[i]]$PTID <- constructs_fMRI$PTID
+}
+
+#save(similarity_temp,file='data/ITC_fusiform.RData')
+
+```
+
+```{r average conditions - fusiform}
+
+cond_avgs <- data.frame(matrix(nrow=4,ncol=14))
+
+cond_avgs[1,] <- colMeans(similarity_temp[[14]][,1:14],na.rm=TRUE)
+cond_avgs[2,] <- colMeans(similarity_temp[[15]][,1:14],na.rm=TRUE)
+cond_avgs[3,] <- colMeans(similarity_temp[[16]][,1:14],na.rm=TRUE)
+cond_avgs[4,] <- colMeans(similarity_temp[[17]][,1:14],na.rm=TRUE)
+
+cond_avgs$group <- factor(names(similarity_temp)[14:17])
+colnames(cond_avgs)[1:14] <- c(1:14)
+
+se_avgs <- data.frame(matrix(nrow=4,ncol=14))
+se_avgs[1,] <- sapply(similarity_temp[[14]][,1:14],se)
+se_avgs[2,] <- sapply(similarity_temp[[15]][,1:14],se)
+se_avgs[3,] <- sapply(similarity_temp[[16]][,1:14],se)
+se_avgs[4,] <- sapply(similarity_temp[[17]][,1:14],se)
+se_avgs$group <- factor(names(similarity_temp)[14:17])
+colnames(se_avgs)[1:14] <- c(1:14)
+
+cond_melt <- melt(cond_avgs,id_vars=c("group"))
+colnames(cond_melt) <- c("group", "TR", "similarity")
+cond_melt$TR <- as.numeric(as.character(cond_melt$TR))
+
+se_melt <- melt(se_avgs,id.vars="group")
+colnames(se_melt) <- c("group", "TR", "se")
+se_melt$TR <- as.numeric(as.character(se_melt$TR))
+
+melt_avg_data <- merge(cond_melt,se_melt,by=c("group","TR"))
+melt_avg_data$se_min <- melt_avg_data$similarity-melt_avg_data$se
+melt_avg_data$se_max <- melt_avg_data$similarity+melt_avg_data$se
+
+```
+
+## Average Similarity 
+
+First, we just want to plot over time, to see if there is some sort of meaningful increases with our task. There does appear to be - TR 5 is encoding period, TR 8 is peak delay period. Interestingly, there isn't a peak of similiarity in the probe period. 
+
+We also can see a pattern in the split across trial type - we see most similarity in the high load trials. It's interesting to me that even in the incorrect high load trials, there is higher inter-trial similarity than in the correct low-load trials. But could this be because of the visual differences in the trial types? 
+
+It does seem like this measure is useful for distinguishing between both load and accuracy, even when corrected for multiple comparisons. We can distinguish between correct and incorrect trials at high load at TRs 4-6 and 8, at low load for TRs 1, 2, 4-14. 
+
+We can distinguish between load for correct trials at TRs 3-7, and for incorrect trials at TRs 1, 2, 4-10, 12 - 14. 
+
+```{r plot average similarity across conditions - fusiform}
+
+ggplot(data=melt_avg_data,aes(x=TR,y=similarity))+
+  geom_line(aes(color=group)) +
+  geom_ribbon(aes(ymin=se_min,ymax=se_max,fill=group),alpha=0.2)+
+  scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+  ggtitle("Intertrial similarity averaged over all subjects")+
+  theme_classic()
+
+```
+
+```{r run t test - across accuracy - fusiform}
+
+corrected_p_val <- 0.05/14
+
+low_load_acc_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(low_load_acc_test) <- paste("TR_",c(1:14))
+rownames(low_load_acc_test) <- c("t","p","corrected_p")
+
+high_load_acc_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(high_load_acc_test) <- paste("TR_",c(1:14))
+rownames(high_load_acc_test) <- c("t","p","corrected_sig")
+
+for (time in seq.int(1,14)){
+  low_test <- t.test(similarity_temp[[16]][,time],similarity_temp[[17]][,time],paired=TRUE)
+  high_test <- t.test(similarity_temp[[14]][,time],similarity_temp[[15]][,time],paired=TRUE)
+  
+  low_load_acc_test[1,time] <- low_test$statistic
+  low_load_acc_test[2,time] <- low_test$p.value
+  if (low_test$p.value < corrected_p_val){low_load_acc_test[3,time] <- 1}else{low_load_acc_test[3,time] <- 0}
+  
+  high_load_acc_test[1,time] <- high_test$statistic
+  high_load_acc_test[2,time] <- high_test$p.value
+  if (high_test$p.value < corrected_p_val){high_load_acc_test[3,time] <- 1}else{high_load_acc_test[3,time] <- 0}
+  
+}
+
+high_load_acc_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between correct and incorrect values at each time point, high load trials" = 14)))
+
+low_load_acc_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between correct and incorrect values at each time point, low load trials" = 14)))
+
+```
+
+```{r run t test - across load - fusiform}
+
+correct_load_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(correct_load_test) <- paste("TR_",c(1:14))
+rownames(correct_load_test) <- c("t","p","corrected_p")
+
+inccorrect_load_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(inccorrect_load_test) <- paste("TR_",c(1:14))
+rownames(inccorrect_load_test) <- c("t","p","corrected_p")
+
+for (time in seq.int(1,14)){
+  correct_test <- t.test(similarity_temp[[14]][,time],similarity_temp[[16]][,time],paired=TRUE)
+  incorrect_test <- t.test(similarity_temp[[15]][,time],similarity_temp[[17]][,time],paired=TRUE)
+  
+  correct_load_test[1,time] <- correct_test$statistic
+  correct_load_test[2,time] <- correct_test$p.value
+  if (correct_test$p.value < corrected_p_val){correct_load_test[3,time] <- 1}else{correct_load_test[3,time] <- 0}
+  
+  inccorrect_load_test[1,time] <- incorrect_test$statistic
+  inccorrect_load_test[2,time] <- incorrect_test$p.value
+  if (incorrect_test$p.value < corrected_p_val){inccorrect_load_test[3,time] <- 1}else{inccorrect_load_test[3,time] <- 0}
+  
+}
+
+correct_load_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between high and low loads at each time point, correct trials" = 14)))
+
+inccorrect_load_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between high and low loads at each time point, incorrect trials" = 14)))
+
+
+```
+
+```{r split into groups - fusiform}
+
+split_similarity <- list()
+split_sim_avgs <- list()
+
+
+for (i in seq.int(14,17)){ 
+  split_similarity[[names(similarity_temp)[i]]] <- split_into_groups(similarity_temp[[i]],WM_groups)
+  colnames(split_similarity[[i-13]][["all"]])[1:14] <- c(1:14)
+  
+  for (level in seq.int(1,3)){
+    temp_data <- data.frame(mean=colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE),se = sapply(split_similarity[[i-13]][[level]][1:14],se),
+                            se_min = colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE) - sapply(split_similarity[[i-13]][[level]][1:14],se),
+                            se_max = colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE) + sapply(split_similarity[[i-13]][[level]][1:14],se))
+    split_sim_avgs[[names(split_similarity)[i-13]]][[names(split_similarity[[i-13]])[level]]] <- data.frame((temp_data))
+    split_sim_avgs[[i-13]][[level]]$group <- rep(names(split_similarity[[i-13]])[level],14)
+    split_sim_avgs[[i-13]][[level]]$TR <- seq.int(1,14)
+    
+  }
+  
+  split_sim_avgs[[i-13]][["all"]] <- rbind(split_sim_avgs[[i-13]][["high"]],split_sim_avgs[[i-13]][["med"]],split_sim_avgs[[i-13]][["low"]])
+  
+  split_sim_avgs[[i-13]][["all"]]$group <- factor(split_sim_avgs[[i-13]][["all"]]$group, levels=c("high","med","low"))
+  
+}
+
+```
+
+## Split into groups
+
+The only thing that pops out here for me is that during the delay period (around TR 8), the high capacity group shows more similarity than the medium or low capacity groups, particularly for the high load trials. Also interesting to note that for the high load incorrect trials, we still see peaks that make sense with our task, while for the low load incorrect trial, there isn't really any informative shape to the curves.
+
+```{r make ggplots for similarity split by group - fusiform}
+
+sim_plots <- list()
+
+for (i in seq.int(1,4)){
+  sim_plots[[i]] <- ggplot(data = split_sim_avgs[[i]][["all"]])+
+    geom_line(aes(x=TR,y=mean,color=group))+
+    geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=group),alpha=0.2)+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(split_sim_avgs)[i])+
+    ylab("Mean Similarity")+
+    theme_classic()
+  
+}
+
+(sim_plots[[1]] + sim_plots[[2]]) / (sim_plots[[3]] + sim_plots[[4]])+
+  plot_layout(guides = "collect")+
+  plot_annotation(title="Inter-trial Similarity")
+
+```
+
+
+```{r compare to behavioral measures - fusiform}
+
+data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
+data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
+
+data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
+
+corr_to_behav_plots <- list()
+
+for (i in seq.int(14,17)){
+  measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
+  
+  for (measure in seq.int(3,6)){
+    for (TR in seq.int(1,14)){
+      measure_by_time[measure-2,TR] <- cor(data_to_plot[,measure],similarity_temp[[i]][,TR],use = "pairwise.complete.obs")
+    }
+  }
+  
+  measure_by_time <- data.frame(t(measure_by_time))
+  measure_by_time$TR <- seq.int(1,14)
+  
+  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[3:6]
+  
+  melted_measure_by_time <- melt(measure_by_time,id.vars="TR")
+  
+  corr_to_behav_plots[[names(similarity_temp)[i]]] <- ggplot(data=melted_measure_by_time,aes(x=TR,y=value))+
+    geom_line(aes(color=variable))+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    theme_classic()
+  
+}
+
+
+
+```
+
+## Compare to behavioral measures 
+
+### Over time
+
+If we just look at the correlation over time for a number of behavioral and clinical measures, the most obvious thing to note is that the similarity, overall, had the highest correlation with accuracy, especially in encoding. Also note that the correlation with omnibus span peaks in the delay period, though it is overall a weaker correlation. Similarly, see a relatively weak negative correlation with BPRS total in the encoding and delay periods. Also interestingly, accuracy at low load is negatively correlated with similarity in the low load inccorect trials - that is, the stronger the correlations between a incorrect trials and the correct template in an individual, the more poorly they do overall. This finding should be interpreted with caution though, because there are few incorrect low load trials overall. 
+
+```{r plot measures by time - fusiform}
+
+(corr_to_behav_plots[[1]] + corr_to_behav_plots[[2]]) / (corr_to_behav_plots[[3]] + corr_to_behav_plots[[4]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Correlation between inter-trial similarity and behavioral measure")
+
+```
+
+```{r make scatters - fusiform}
+
+scatter_plots_delay <- list()
+scatter_plots_cue <- list()
+scatter_plots_probe <- list()
+
+for (i in seq.int(14,17)){
+  temp_plot_data <- merge(data_to_plot,similarity_temp[[i]],by="PTID")
+  scatter_plots_delay[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X8))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_delay[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X8))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_delay[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X8))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X6))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X6))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X6))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+    
+    scatter_plots_probe[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X11))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_probe[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X11))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_probe[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X11))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+}
+
+```
+
+### Encoding Period 
+
+The main point of these analyses were to make sure that we weren't missing any non-linear relationships that would be obscured in a linear correlation. We don't really see any of these. The only significant linear correlations are those with accuracy. 
+
+```{r scatter plots - encoding - fusiform}
+
+(scatter_plots_cue[[1]][["omnibus"]] + scatter_plots_cue[[2]][["omnibus"]]) /
+  (scatter_plots_cue[[3]][["omnibus"]] + scatter_plots_cue[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$omnibus_span_no_DFR_MRI)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$omnibus_span_no_DFR_MRI)
+
+(scatter_plots_cue[[1]][["BPRS"]] + scatter_plots_cue[[2]][["BPRS"]]) /
+  (scatter_plots_cue[[3]][["BPRS"]] + scatter_plots_cue[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$BPRS_TOT.x)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$BPRS_TOT.x)
+
+
+(scatter_plots_cue[[1]][["L3_acc"]] + scatter_plots_cue[[2]][["L3_acc"]]) /
+  (scatter_plots_cue[[3]][["L3_acc"]] + scatter_plots_cue[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+
+
+```
+
+### Delay Period 
+
+No non-linear here, either. The linear relationships with accuracy all are statistically significant, though the relationship with omnibus span only trends towards significance. 
+
+```{r plot scatters - delay - fusiform}
+
+(scatter_plots_delay[[1]][["omnibus"]] + scatter_plots_delay[[2]][["omnibus"]]) /
+  (scatter_plots_delay[[3]][["omnibus"]] + scatter_plots_delay[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - delay")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X8,data_to_plot$omnibus_span_no_DFR_MRI)
+
+
+(scatter_plots_delay[[1]][["BPRS"]] + scatter_plots_delay[[2]][["BPRS"]]) /
+  (scatter_plots_delay[[3]][["BPRS"]] + scatter_plots_delay[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS vs inter-trial similiarity - delay")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X8,data_to_plot$BPRS_TOT.x)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X8,data_to_plot$BPRS_TOT.x)
+
+(scatter_plots_delay[[1]][["L3_acc"]] + scatter_plots_delay[[2]][["L3_acc"]]) /
+  (scatter_plots_delay[[3]][["L3_acc"]] + scatter_plots_delay[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc vs inter-trial similiarity - delay")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+
+```
+
+### Probe Period 
+
+Here, we're also seeing some correlations with accuracy for correct trials (irrespective of load) and with BPRS at low load correct trials. 
+
+```{r plot scatters - probe - fusiform}
+
+(scatter_plots_probe[[1]][["omnibus"]] + scatter_plots_probe[[2]][["omnibus"]]) /
+  (scatter_plots_probe[[3]][["omnibus"]] + scatter_plots_probe[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X11,data_to_plot$omnibus_span_no_DFR_MRI)
+
+
+(scatter_plots_probe[[1]][["BPRS"]] + scatter_plots_probe[[2]][["BPRS"]]) /
+  (scatter_plots_probe[[3]][["BPRS"]] + scatter_plots_probe[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["low_correct_avg"]]$X11,data_to_plot$BPRS_TOT.x)
+
+
+(scatter_plots_probe[[1]][["L3_acc"]] + scatter_plots_probe[[2]][["L3_acc"]]) /
+  (scatter_plots_probe[[3]][["L3_acc"]] + scatter_plots_probe[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+
+```
+
+## Comparing encoding to delay 
+
+The analysis we were looking at before only looked within a single TR - now, let's look at the fidelity across TRs representing encoding and delay, and how that relates to different behavioral measures. We'll look at 3 different things - first, just comparison across any given trial. Then, we'll look at encoding vs correct average delay, and delay vs correct average encoding. 
+
+```{r make encoding to delay plots - fusiform}
+
+encoding_to_delay_plots <- list()
+
+for (i in c(6,10,12)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_encoding_to_correct_delay"]])
+colnames(temp_plot_data)[9] <- "correct_encoding_delay"
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs Omnibus Span")+
+  theme_classic()
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs BPRS")+
+  theme_classic()
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs L3 accuracy")+
+  theme_classic()
+
+```
+
+In these, graphs, if a correlation is black, it is below p < 0.05; if it is not, it is grey. 
+
+```{r calculate encoding to delay correlations - fusiform}
+
+correlations = list()
+
+for (i in c(6,10,12)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_encoding_to_correct_delay"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_encoding_to_correct_delay"]] <- temp
+
+
+```
+
+
+### Individual Encoding to Individual Delay 
+
+Here, taking the correlation between multivariate representation at encoding (TR 5) and delay (TR 8) on each trial. 
+
+This is definitely the messiest - there seem to be slight negative correlations between omnibus span and similiarity in correct trials (though this is not statistically significant), and definitely a negative correlation between inter-trial similarity at high load and accuracy. Also interesting to see (though not shown here, is that high load accuracy only correlates with similarity at high load, and low load accuracy only correlates to similarity at low load) Both of these suggest that the less similiar encoding and delay period are, the higher capacity and better performance an individual has, particularly on high load trials. 
+
+```{r print correlations - individual encoding to individual delay - fusiform}
+
+correlations[["encoding_to_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Individual Delay" = 3)))
+
+```
+
+An important check is to see whether these measures that we're calculating have any behavioral relevance. To look at this, we're going to run paired t-tests to look at whether we can distinguish load across correct trials and accuracy across high load trials for each of the measures we calculate. 
+
+This measure can't distinguish either load or accuracy.
+
+```{r individual trial encoding to delay t tests - fusiform}
+
+encoding_to_delay_avg <- fisherz(similarity_temp[["encoding_to_delay_avg"]])
+
+t.test(encoding_to_delay_avg[,4],encoding_to_delay_avg[,2],paired=TRUE)
+t.test(encoding_to_delay_avg[,4],encoding_to_delay_avg[,3],paired=TRUE)
+
+```
+
+```{r Individual Encoding to Individual Delay - fusiform}
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+
+### Individual Trial Encoding vs Correct Template Delay 
+
+Here, we're taking the delay period from a "template" (ie average of all correct trials) and correlating that to the encoding period of each trial. We see strong negative correlations with accuracy for all trial types except for low load incorrect trials, and positive correlations with BPRS for the high load trials (regardless of accuracy). This suggests that as there is stronger correlation between encoding on a given trial and the correct delay template, there are more psychiatric symptoms. 
+
+The relationship between omnibus span and similarity in the correct trials (irrespective of load) is trending towards significance.
+
+```{r print correlations - individual encoding to template delay - fusiform}
+
+correlations[["encoding_to_correct_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Template Delay" = 3)))
+
+```
+
+This measure distinguishes both load and accuracy. 
+
+```{r encoding to correct delay t tests - fusiform}
+
+encoding_to_correct_delay_avg <- fisherz(similarity_temp[["encoding_to_correct_delay_avg"]])
+
+t.test(encoding_to_correct_delay_avg[,4],encoding_to_correct_delay_avg[,2],paired=TRUE)
+t.test(encoding_to_correct_delay_avg[,4],encoding_to_correct_delay_avg[,3],paired=TRUE)
+
+```
+
+```{r indiv encoding to correct delay - fusiform}
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+We've seen that there is a relationship between BPRS and the correlation between the individual encoding trial and the template delay, but we want to make sure it holds when we control for accuracy and span. Both of them still do!  
+
+```{r check BPRS/ITC relationship for encoding/template delay - fusiform}
+
+data_for_reg <- data.frame(acc = data_to_plot$XDFR_MRI_ACC_L3,span = data_to_plot$omnibus_span_no_DFR_MRI, BPRS = data_to_plot$BPRS_TOT.x, ITC_correct = similarity_temp[["encoding_to_correct_delay_avg"]][,4], ITC_incorrect = similarity_temp[["encoding_to_correct_delay_avg"]][,2])
+
+BPRS_correct.lm <- lm(BPRS ~ acc + span + ITC_correct,data = data_for_reg)
+summary(BPRS_correct.lm)
+
+BPRS_incorrect.lm <- lm(BPRS ~ acc + span + ITC_incorrect,data = data_for_reg)
+summary(BPRS_incorrect.lm)
+
+```
+
+
+### Correct Template Encoding vs Individual Trial Delay 
+
+Interestingly, we see a slightly different pattern when we look at how the delay period of any given trial correlates to the correct encoding template. Omnibus span is positively correlated with similarity in the low load incorrect trials (though caution, few trials here), and negatively correlated with the high load correct trials. Accuracy is correlated to similarity at high load trials and correct low load trials, and there are significant positive correlations between BPRS and high load correct trials. 
+
+```{r print correlations - template encoding to indiv delay - fusiform}
+
+correlations[["correct_encoding_to_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template Encoding to Delay" = 3)))
+
+```
+
+This measure distinguishes both load and accuracy. 
+
+```{r correct encoding to delay t tests - fusiform}
+
+correct_encoding_to_delay_avg <- fisherz(similarity_temp[["correct_encoding_to_delay_avg"]])
+
+t.test(correct_encoding_to_delay_avg[,4],correct_encoding_to_delay_avg[,2],paired=TRUE)
+t.test(correct_encoding_to_delay_avg[,4],correct_encoding_to_delay_avg[,3],paired=TRUE)
+
+```
+
+```{r correct encoding to indiv delay - fusiform}
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+This one also does!  
+
+```{r check BPRS/ITC relationship for template encoding/delay - fusiform}
+
+data_for_reg <- data.frame(acc = data_to_plot$XDFR_MRI_ACC_L3,span = data_to_plot$omnibus_span_no_DFR_MRI, BPRS = data_to_plot$BPRS_TOT.x, ITC_correct = similarity_temp[["correct_encoding_to_delay_avg"]][,4], ITC_incorrect = similarity_temp[["correct_encoding_to_delay_avg"]][,2])
+
+BPRS_correct.lm <- lm(BPRS ~ acc + span + ITC_correct,data = data_for_reg)
+summary(BPRS_correct.lm)
+
+```
+
+### Correct template encoding to correct template delay 
+
+Here, we just want to look at the correlation between the template encoding to template delay. In this analysis, we see significant negative correlation with omnibus span, negative correlation with accuracy, and a positive correlation with BPRS. 
+
+These relationships suggest that as span and accuracy increase, there is less similarity beween encoding and delay, but we see the opposite relationship with psychiatric symptoms. 
+
+```{r print correlations - within template encoding/delay - fusiform}
+
+correlations[["correct_encoding_to_correct_delay"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template Encoding to Template Delay" = 1))
+
+```
+
+```{r correct encoding to correct delay - fusiform}
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]]
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["L3_Acc"]]
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]]
+
+```
+
+This one, however, does not. 
+
+```{r check BPRS/ITC relationship for template encoding/template delay - fusiform}
+
+data_for_reg <- data.frame(acc = data_to_plot$XDFR_MRI_ACC_L3,span = data_to_plot$omnibus_span_no_DFR_MRI, BPRS = data_to_plot$BPRS_TOT.x, ITC = similarity_temp[["correct_encoding_to_correct_delay"]])
+
+BPRS.lm <- lm(BPRS ~ ITC + span + acc,data = data_for_reg)
+summary(BPRS.lm)
+
+```
+
+## Comparing encoding to probe 
+
+Another theoretically interesting period is comparing encoding to probe. Here, we'll do the same thing as above, but we're going to take from TR 5 for encoding and TR 11 for probe. 
+
+```{r make encoding to probe plots - fusiform}
+
+encoding_to_probe_plots <- list()
+
+for (i in c(7,11,13)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_encoding_to_correct_probe"]])
+colnames(temp_plot_data)[9] <- "correct_encoding_probe"
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs Omnibus Span")+
+  theme_classic()
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs BPRS")+
+  theme_classic()
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs L3 accuracy")+
+  theme_classic()
+
+```
+
+In these, graphs, if a correlation is black, it is below p < 0.05; if it is not, it is grey. 
+
+```{r calculate encoding to probe correlations - fusiform}
+
+correlations = list()
+
+for (i in c(7,11,13)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_encoding_to_correct_probe"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_encoding_to_correct_probe"]] <- temp
+
+
+```
+
+
+### Individual Encoding to Individual Probe 
+
+Here, taking the correlation between multivariate representation at encoding (TR 5) and probe (TR 11) on each trial. 
+
+The only significant correlation we see here is between accuracy an high load correct trials.  
+
+```{r print correlations - individual encoding to probe trial - fusiform}
+
+correlations[["encoding_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Individual Probe" = 3)))
+
+```
+
+This measure can't distinguish between load but not accuracy (but it's very very close). 
+
+```{r individual trial encoding to probe t tests - fusiform}
+
+encoding_to_probe_avg <- fisherz(similarity_temp[["encoding_to_probe_avg"]])
+
+t.test(encoding_to_probe_avg[,4],encoding_to_probe_avg[,2],paired=TRUE)
+t.test(encoding_to_probe_avg[,4],encoding_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r encoding to probe by trial - fusiform}
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+
+### Individual Trial Encoding vs Correct Template Probe
+
+This shows more relationships with accuracy - for all trial types except for low load incorrect. 
+
+```{r print correlations - individual encoding to template probe - fusiform}
+
+correlations[["encoding_to_correct_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Template probe" = 3)))
+
+```
+
+This measure distinguishes both load and accuracy. 
+
+```{r encoding to correct probe t tests - fusiform}
+
+encoding_to_correct_probe_avg <- fisherz(similarity_temp[["encoding_to_correct_probe_avg"]])
+
+t.test(encoding_to_correct_probe_avg[,4],encoding_to_correct_probe_avg[,2],paired=TRUE)
+t.test(encoding_to_correct_probe_avg[,4],encoding_to_correct_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r indiv encoding to correct probe - fusiform}
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct Template Encoding vs Individual Trial probe 
+
+Here, we're back to only seeing a relationship with high load correct trials and accuracy. 
+
+```{r print correlations - template encoding to indiv probe - fusiform}
+
+correlations[["correct_encoding_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template Encoding to probe" = 3)))
+
+```
+
+This measure only distinguishes load. 
+
+```{r correct encoding to probe t tests - fusiform}
+
+correct_encoding_to_probe_avg <- fisherz(similarity_temp[["correct_encoding_to_probe_avg"]])
+
+t.test(correct_encoding_to_probe_avg[,4],correct_encoding_to_probe_avg[,2],paired=TRUE)
+t.test(correct_encoding_to_probe_avg[,4],correct_encoding_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r correct encoding to indiv probe - fusiform}
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct template encoding to correct template probe 
+
+Again, we're only seeing relationships between the correlationi and with accuracy. 
+
+```{r print correlations - within template - encoding/probe - fusiform}
+
+correlations[["correct_encoding_to_correct_probe"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template Encoding to Template Probe" = 1))
+
+```
+
+```{r correct encoding to correct probe - fusiform}
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["omnibus"]]
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["L3_Acc"]]
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["BPRS"]]
+
+```
+
+
+## Comparing delay to probe 
+
+Another theoretically interesting period is comparing delay to probe. Interestingly, it seems as though comparing representations here is only diagnostic of correct vs incorrect trials (not high vs low load), and also is related to overall accuracy. 
+
+```{r make delay to probe plots - fusiform}
+
+delay_to_probe_plots <- list()
+
+for (i in c(3,8,9)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_delay_to_correct_probe"]])
+colnames(temp_plot_data)[9] <- "correct_delay_probe"
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs Omnibus Span")+
+  theme_classic()
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs BPRS")+
+  theme_classic()
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs L3 accuracy")+
+  theme_classic()
+
+```
+
+In these, graphs, if a correlation is black, it is below p < 0.05; if it is not, it is grey. 
+
+```{r calculate correlations delay to probe - fusiform}
+
+correlations = list()
+
+for (i in c(3,8,9)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_delay_to_correct_probe"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_delay_to_correct_probe"]] <- temp
+
+
+```
+
+
+### Individual delay to Individual Probe 
+
+Here, taking the correlation between multivariate representation at delay (TR 5) and probe (TR 11) on each trial. 
+
+Here, we're seeing correlation between correct trials, regardless of load. 
+
+```{r print correlations - delay to probe - fusiform}
+
+correlations[["delay_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual delay to Individual Probe" = 3)))
+
+```
+
+This measure can't distinguish between either load or accuracy. 
+
+```{r individual trial delay to probe t tests - fusiform}
+
+delay_to_probe_avg <- fisherz(similarity_temp[["delay_to_probe_avg"]])
+
+t.test(delay_to_probe_avg[,4],delay_to_probe_avg[,2],paired=TRUE)
+t.test(delay_to_probe_avg[,4],delay_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r delay to probe by trial - fusiform}
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+
+### Individual Trial Delay vs Correct Template Probe
+
+Same as before - only seeing a relationship between similarity and correct trials, regardless of load. 
+
+```{r print correlations - individual delay to template probe - fusiform}
+
+correlations[["delay_to_correct_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual delay to Template probe" = 3)))
+
+```
+
+This measure distinguishes only between accuracy, but not load. 
+
+```{r delay to correct probe t tests - fusiform}
+
+delay_to_correct_probe_avg <- fisherz(similarity_temp[["delay_to_correct_probe_avg"]])
+
+t.test(delay_to_correct_probe_avg[,4],delay_to_correct_probe_avg[,2],paired=TRUE)
+t.test(delay_to_correct_probe_avg[,4],delay_to_correct_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r indiv delay to correct probe - fusiform}
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct Template delay vs Individual Trial probe 
+
+Same as before - only relationship with correct trials. 
+
+```{r print correlations - template delay to indiv probe - fusiform}
+
+correlations[["correct_delay_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template delay to probe" = 3)))
+
+```
+
+This measure only distinguishes accuracy. 
+
+```{r correct delay to probe t tests - fusiform}
+
+correct_delay_to_probe_avg <- fisherz(similarity_temp[["correct_delay_to_probe_avg"]])
+
+t.test(correct_delay_to_probe_avg[,4],correct_delay_to_probe_avg[,2],paired=TRUE)
+t.test(correct_delay_to_probe_avg[,4],correct_delay_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r correct delay to indiv probe - fusiform}
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct template delay to correct template probe 
+
+Again, we're only seeing relationships between the correlation and with accuracy. 
+
+```{r print correlations - correct delay to correct probe - fusiform}
+
+correlations[["correct_delay_to_correct_probe"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template delay to Template Probe" = 1))
+
+```
+
+```{r correct delay to correct probe - fusiform}
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["omnibus"]]
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["L3_Acc"]]
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["BPRS"]]
+
+```
+
+
+# DFR
+
+Now, we move on to regions associated with load effects. 
+
+```{r load in matlab data - DFR}
+
+similarity_temp <- read.mat('data/intertrial_similarity_DFR.mat')
+
+for (i in seq.int(14,17)){
+  similarity_temp[[i]] <- data.frame(similarity_temp[[i]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  similarity_temp[[i]]$PTID <- constructs_fMRI$PTID
+}
+
+#save(similarity_temp,file='data/ITC_DFR_delay.RData')
+
+```
+
+```{r average conditions - DFR}
+
+cond_avgs <- data.frame(matrix(nrow=4,ncol=14))
+
+cond_avgs[1,] <- colMeans(similarity_temp[[14]][,1:14],na.rm=TRUE)
+cond_avgs[2,] <- colMeans(similarity_temp[[15]][,1:14],na.rm=TRUE)
+cond_avgs[3,] <- colMeans(similarity_temp[[16]][,1:14],na.rm=TRUE)
+cond_avgs[4,] <- colMeans(similarity_temp[[17]][,1:14],na.rm=TRUE)
+
+cond_avgs$group <- factor(names(similarity_temp)[14:17])
+colnames(cond_avgs)[1:14] <- c(1:14)
+
+se_avgs <- data.frame(matrix(nrow=4,ncol=14))
+se_avgs[1,] <- sapply(similarity_temp[[14]][,1:14],se)
+se_avgs[2,] <- sapply(similarity_temp[[15]][,1:14],se)
+se_avgs[3,] <- sapply(similarity_temp[[16]][,1:14],se)
+se_avgs[4,] <- sapply(similarity_temp[[17]][,1:14],se)
+se_avgs$group <- factor(names(similarity_temp)[14:17])
+colnames(se_avgs)[1:14] <- c(1:14)
+
+cond_melt <- melt(cond_avgs,id_vars=c("group"))
+colnames(cond_melt) <- c("group", "TR", "similarity")
+cond_melt$TR <- as.numeric(as.character(cond_melt$TR))
+
+se_melt <- melt(se_avgs,id.vars="group")
+colnames(se_melt) <- c("group", "TR", "se")
+se_melt$TR <- as.numeric(as.character(se_melt$TR))
+
+melt_avg_data <- merge(cond_melt,se_melt,by=c("group","TR"))
+melt_avg_data$se_min <- melt_avg_data$similarity-melt_avg_data$se
+melt_avg_data$se_max <- melt_avg_data$similarity+melt_avg_data$se
+```
+
+## Average Similarity 
+
+Although slightly larger errors and slightly lower correlations, seeing the same patterns as in the fusiform. 
+
+For this mask, we see the differences in accuracy at high load at TRs 5, 6, 8, 11, 13 and 14 and at TRs 1, 2, 4-11, 13 and 14 for low load. We can distinguish between load for correct trials at TRs 2-7, 11, 12, and for incorrect trials at TRs 1-2, 3-7, 10-14. 
+
+```{r plot average similarity across conditions - DFR}
+
+ggplot(data=melt_avg_data,aes(x=TR,y=similarity))+
+  geom_line(aes(color=group)) +
+  geom_ribbon(aes(ymin=se_min,ymax=se_max,fill=group),alpha=0.2)+
+  scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+  ggtitle("Intertrial similarity averaged over all subjects")+
+  theme_classic()
+
+```
+
+```{r run t test - across accuracy - DFR}
+
+corrected_p_val <- 0.05/14
+
+low_load_acc_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(low_load_acc_test) <- paste("TR_",c(1:14))
+rownames(low_load_acc_test) <- c("t","p","corrected_p")
+
+high_load_acc_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(high_load_acc_test) <- paste("TR_",c(1:14))
+rownames(high_load_acc_test) <- c("t","p","corrected_sig")
+
+for (time in seq.int(1,14)){
+  low_test <- t.test(similarity_temp[[16]][,time],similarity_temp[[17]][,time],paired=TRUE)
+  high_test <- t.test(similarity_temp[[14]][,time],similarity_temp[[15]][,time],paired=TRUE)
+  
+  low_load_acc_test[1,time] <- low_test$statistic
+  low_load_acc_test[2,time] <- low_test$p.value
+  if (low_test$p.value < corrected_p_val){low_load_acc_test[3,time] <- 1}else{low_load_acc_test[3,time] <- 0}
+  
+  high_load_acc_test[1,time] <- high_test$statistic
+  high_load_acc_test[2,time] <- high_test$p.value
+  if (high_test$p.value < corrected_p_val){high_load_acc_test[3,time] <- 1}else{high_load_acc_test[3,time] <- 0}
+  
+}
+
+high_load_acc_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between correct and incorrect values at each time point, high load trials" = 14)))
+
+low_load_acc_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between correct and incorrect values at each time point, low load trials" = 14)))
+
+```
+
+```{r run t test - across load - DFR}
+
+correct_load_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(correct_load_test) <- paste("TR_",c(1:14))
+rownames(correct_load_test) <- c("t","p","corrected_p")
+
+inccorrect_load_test <- data.frame(matrix(nrow=3,ncol=14))
+colnames(inccorrect_load_test) <- paste("TR_",c(1:14))
+rownames(inccorrect_load_test) <- c("t","p","corrected_p")
+
+for (time in seq.int(1,14)){
+  correct_test <- t.test(similarity_temp[[14]][,time],similarity_temp[[16]][,time],paired=TRUE)
+  incorrect_test <- t.test(similarity_temp[[15]][,time],similarity_temp[[17]][,time],paired=TRUE)
+  
+  correct_load_test[1,time] <- correct_test$statistic
+  correct_load_test[2,time] <- correct_test$p.value
+  if (correct_test$p.value < corrected_p_val){correct_load_test[3,time] <- 1}else{correct_load_test[3,time] <- 0}
+  
+  inccorrect_load_test[1,time] <- incorrect_test$statistic
+  inccorrect_load_test[2,time] <- incorrect_test$p.value
+  if (incorrect_test$p.value < corrected_p_val){inccorrect_load_test[3,time] <- 1}else{inccorrect_load_test[3,time] <- 0}
+  
+}
+
+correct_load_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between high and low loads at each time point, correct trials" = 14)))
+
+inccorrect_load_test %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "t-test between high and low loads at each time point, incorrect trials" = 14)))
+
+
+```
+
+```{r split into groups - DFR}
+
+split_similarity <- list()
+split_sim_avgs <- list()
+
+
+for (i in seq.int(14,17)){ 
+  split_similarity[[names(similarity_temp)[i]]] <- split_into_groups(similarity_temp[[i]],WM_groups)
+  colnames(split_similarity[[i-13]][["all"]])[1:14] <- c(1:14)
+  
+  for (level in seq.int(1,3)){
+    temp_data <- data.frame(mean=colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE),se = sapply(split_similarity[[i-13]][[level]][1:14],se),
+                            se_min = colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE) - sapply(split_similarity[[i-13]][[level]][1:14],se),
+                            se_max = colMeans(split_similarity[[i-13]][[level]][1:14],na.rm=TRUE) + sapply(split_similarity[[i-13]][[level]][1:14],se))
+    split_sim_avgs[[names(split_similarity)[i-13]]][[names(split_similarity[[i-13]])[level]]] <- data.frame((temp_data))
+    split_sim_avgs[[i-13]][[level]]$group <- rep(names(split_similarity[[i-13]])[level],14)
+    split_sim_avgs[[i-13]][[level]]$TR <- seq.int(1,14)
+    
+  }
+  
+  split_sim_avgs[[i-13]][["all"]] <- rbind(split_sim_avgs[[i-13]][["high"]],split_sim_avgs[[i-13]][["med"]],split_sim_avgs[[i-13]][["low"]])
+  
+  split_sim_avgs[[i-13]][["all"]]$group <- factor(split_sim_avgs[[i-13]][["all"]]$group, levels=c("high","med","low"))
+  
+}
+
+```
+
+## Split into groups
+
+Same story as in fusiform, except we also a little more group distinction in the encoding period in the high load correct trials, where high and medium capacity subjects show increased similarity vs low capacity subjects. 
+
+```{r make ggplots for similarity split by group - DFR}
+
+sim_plots <- list()
+
+for (i in seq.int(1,4)){
+  sim_plots[[i]] <- ggplot(data = split_sim_avgs[[i]][["all"]])+
+    geom_line(aes(x=TR,y=mean,color=group))+
+    geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=group),alpha=0.2)+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(split_sim_avgs)[i])+
+    ylab("Mean Similarity")+
+    theme_classic()
+  
+}
+
+(sim_plots[[1]] + sim_plots[[2]]) / (sim_plots[[3]] + sim_plots[[4]])+
+  plot_layout(guides = "collect")+
+  plot_annotation(title="Inter-trial Similarity")
+
+```
+
+
+```{r compare to behavioral measures - DFR}
+
+data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
+data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
+
+data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
+
+corr_to_behav_plots <- list()
+
+for (i in seq.int(14,17)){
+  measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
+  
+  for (measure in seq.int(3,6)){
+    for (TR in seq.int(1,14)){
+      measure_by_time[measure-2,TR] <- cor(data_to_plot[,measure],similarity_temp[[i]][,TR],use="pairwise.complete.obs")
+    }
+  }
+  
+  measure_by_time <- data.frame(t(measure_by_time))
+  measure_by_time$TR <- seq.int(1,14)
+  
+  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[3:6]
+  
+  melted_measure_by_time <- melt(measure_by_time,id.vars="TR")
+  
+  corr_to_behav_plots[[names(similarity_temp)[i]]] <- ggplot(data=melted_measure_by_time,aes(x=TR,y=value))+
+    geom_line(aes(color=variable))+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    theme_classic()
+  
+}
+
+```
+
+## Compare to behavioral measures 
+
+### Over time
+
+Here, we're actually seeing something a little different and interesting - stronger correlations overall, and omnibus span is most related during the encoding and probe periods, but not delay periods. There also isn't any correlation with the clinical measures. 
+
+```{r plot measures by time - DFR}
+
+(corr_to_behav_plots[[1]] + corr_to_behav_plots[[2]]) / (corr_to_behav_plots[[3]] + corr_to_behav_plots[[4]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Correlation between inter-trial similarity and behavioral measure")
+
+```
+
+```{r make scatters - DFR}
+
+scatter_plots_delay <- list()
+scatter_plots_cue <- list()
+scatter_plots_probe <- list()
+
+for (i in seq.int(14,17)){
+  temp_plot_data <- merge(data_to_plot,similarity_temp[[i]],by="PTID")
+  scatter_plots_delay[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X8))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_delay[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X8))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_delay[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X8))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X8),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X6))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X6))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_cue[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X6))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X6),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+    scatter_plots_probe[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X11))+
+    stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_probe[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=BPRS_TOT.x,y=X11))+
+    stat_smooth(aes(x=BPRS_TOT.x,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+  
+  scatter_plots_probe[[names(similarity_temp)[i]]][["L3_acc"]]  <- ggplot(data=temp_plot_data)+
+    geom_point(aes(x=XDFR_MRI_ACC_L3,y=X11))+
+    stat_smooth(aes(x=XDFR_MRI_ACC_L3,y=X11),method="lm")+
+    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+    ggtitle(names(similarity_temp)[i])+
+    ylab("Inter-trial similarity")+
+    theme_classic()
+}
+
+```
+
+### Encoding Period 
+
+Just like before, not seeing any non-linear relationships, though the relationship between accuracy and similarity is statistically significant for all conditions except for low load incorrect trials. 
+
+```{r scatter plots - encoding - DFR}
+
+(scatter_plots_cue[[1]][["omnibus"]] + scatter_plots_cue[[2]][["omnibus"]]) /
+  (scatter_plots_cue[[3]][["omnibus"]] + scatter_plots_cue[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$omnibus_span_no_DFR_MRI)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$omnibus_span_no_DFR_MRI)
+
+(scatter_plots_cue[[1]][["BPRS"]] + scatter_plots_cue[[2]][["BPRS"]]) /
+  (scatter_plots_cue[[3]][["BPRS"]] + scatter_plots_cue[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$BPRS_TOT.x)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$BPRS_TOT.x)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X5,data_to_plot$BPRS_TOT.x)
+
+
+(scatter_plots_cue[[1]][["L3_acc"]] + scatter_plots_cue[[2]][["L3_acc"]]) /
+  (scatter_plots_cue[[3]][["L3_acc"]] + scatter_plots_cue[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc span vs inter-trial similiarity - encoding")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
+
+
+```
+
+### Delay Period 
+
+Same - no non-linear relationships. Here, only the relationship with high load accuracy is related for the high load correct trials and low load incorrect trials. 
+
+```{r plot scatters - delay - DFR}
+
+(scatter_plots_delay[[1]][["omnibus"]] + scatter_plots_delay[[2]][["omnibus"]]) /
+  (scatter_plots_delay[[3]][["omnibus"]] + scatter_plots_delay[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - delay")
+
+cor.test(similarity_temp[["low_correct_avg"]]$X8,data_to_plot$omnibus_span_no_DFR_MRI)
+
+
+(scatter_plots_delay[[1]][["BPRS"]] + scatter_plots_delay[[2]][["BPRS"]]) /
+  (scatter_plots_delay[[3]][["BPRS"]] + scatter_plots_delay[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS vs inter-trial similiarity - delay")
+
+(scatter_plots_delay[[1]][["L3_acc"]] + scatter_plots_delay[[2]][["L3_acc"]]) /
+  (scatter_plots_delay[[3]][["L3_acc"]] + scatter_plots_delay[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc vs inter-trial similiarity - delay")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X8,data_to_plot$XDFR_MRI_ACC_L3)
+
+```
+
+### Probe Period 
+
+There's a correlation between accuracy and high load trials (regardless of accuracy) and omnibus span and high load trials (regardless of accuracy).   
+
+```{r plot scatters - probe - DFR}
+
+(scatter_plots_probe[[1]][["omnibus"]] + scatter_plots_probe[[2]][["omnibus"]]) /
+  (scatter_plots_probe[[3]][["omnibus"]] + scatter_plots_probe[[4]][["omnibus"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Omnibus span vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X11,data_to_plot$omnibus_span_no_DFR_MRI)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X11,data_to_plot$omnibus_span_no_DFR_MRI)
+
+
+(scatter_plots_probe[[1]][["BPRS"]] + scatter_plots_probe[[2]][["BPRS"]]) /
+  (scatter_plots_probe[[3]][["BPRS"]] + scatter_plots_probe[[4]][["BPRS"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "BPRS vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["low_correct_avg"]]$X11,data_to_plot$BPRS_TOT.x)
+
+
+(scatter_plots_probe[[1]][["L3_acc"]] + scatter_plots_probe[[2]][["L3_acc"]]) /
+  (scatter_plots_probe[[3]][["L3_acc"]] + scatter_plots_probe[[4]][["L3_acc"]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "L3_acc vs inter-trial similiarity - probe")
+
+cor.test(similarity_temp[["high_correct_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["high_incorrect_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_correct_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(similarity_temp[["low_incorrect_avg"]]$X11,data_to_plot$XDFR_MRI_ACC_L3)
+
+```
+
+## Comparing encoding to delay 
+
+Same analysis pattern as before we're going to now try to correlate across TRs. 
+
+```{r make encoding to delay plots - DFR}
+
+encoding_to_delay_plots <- list()
+
+for (i in c(6,10,12)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]] == 0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_delay_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_encoding_to_correct_delay"]])
+colnames(temp_plot_data)[9] <- "correct_encoding_delay"
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs Omnibus Span")+
+  theme_classic()
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs BPRS")+
+  theme_classic()
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_encoding_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/delay vs L3 accuracy")+
+  theme_classic()
+
+```
+
+Just like before, black represents a statistically significant value (p < 0.05). Scatter plots will be shown below. 
+
+```{r calculate correlations encoding to delay - DFR}
+
+correlations = list()
+
+for (i in c(6,10,12)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_encoding_to_correct_delay"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_encoding_to_correct_delay"]] <- temp
+
+```
+
+### Individual Encoding to Individual Delay 
+
+There is a statistically significant negative correlation with high load accuracy and correct trials (regardless of load), and a trend towards a negative correlation between omnibus span and similiarity on correct low load trials. There is also a significant relationship between omnibus span and similarity on low load incorrect trials, but just as before, this needs to be taken with a grain of caution. There are no significant correlations with clinical measures. 
+
+```{r print correlations - individual encoding to individual delay - dfr}
+
+correlations[["encoding_to_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Individual Delay" = 3)))
+
+```
+
+This measure can distiniguish load but not accuracy. 
+
+```{r individual trial encoding to delay t tests - DFR}
+
+encoding_to_delay_avg <- fisherz(similarity_temp[["encoding_to_delay_avg"]])
+
+t.test(encoding_to_delay_avg[,4],encoding_to_delay_avg[,2],paired=TRUE)
+t.test(encoding_to_delay_avg[,4],encoding_to_delay_avg[,3],paired=TRUE)
+
+```
+
+
+```{r Individual Encoding to Individual Delay - DFR}
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Individual Trial Encoding vs Correct Template Delay 
+
+Here, we start to see a different pattern from the fusiform. There is a significant negative correlation between similarity on correct high load trials and omnibus span and also with high load accuracy. There is also no significant relationship with clinical measures. 
+
+This is slightly different from the fusiform, where we saw relationships with clinical measures, and where we didn't see any significant relationships with omnibus span. 
+
+```{r print correlations - indiv encoding to template delay - dfr}
+
+correlations[["encoding_to_correct_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_correct_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Template Delay" = 3)))
+
+
+
+```
+
+This measure can distinguish both load and accuracy.
+
+```{r encoding to correct delay t tests - DFR}
+
+encoding_to_correct_delay_avg <- fisherz(similarity_temp[["encoding_to_correct_delay_avg"]])
+
+t.test(encoding_to_correct_delay_avg[,4],encoding_to_correct_delay_avg[,2],paired=TRUE)
+t.test(encoding_to_correct_delay_avg[,4],encoding_to_correct_delay_avg[,3],paired=TRUE)
+
+```
+
+
+```{r indiv encoding to correct delay - DFR}
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["encoding_to_correct_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct Template Encoding vs Individual Trial Delay 
+
+Here, we only see a significant negative correlation between similarity at correct low load trials and high load accuracy. This is starkly different from the fusiform similarity, where we saw relationships between similarity at correct high load trials and omnibus span and BPRS. Also interesting here is that all trial types showed correlation between fusiform similarity and high load accuracy.  
+
+```{r correlations - template encoding to indiv delay - dfr}
+
+correlations[["correct_encoding_to_delay_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_encoding_to_delay_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template Encoding to Delay" = 3)))
+
+```
+
+This measure can only distinguish load. 
+
+```{r correct encoding to delay t tests - DFR}
+
+correct_encoding_to_delay_avg <- fisherz(similarity_temp[["correct_encoding_to_delay_avg"]])
+
+t.test(correct_encoding_to_delay_avg[,4],correct_encoding_to_delay_avg[,2],paired=TRUE)
+t.test(correct_encoding_to_delay_avg[,4],correct_encoding_to_delay_avg[,3],paired=TRUE)
+
+```
+
+
+```{r correct encoding to indiv delay - DFR}
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_delay_plots[["correct_encoding_to_delay_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct template encoding to correct template delay 
+
+No significant relationships here - only thing that even trends is accuracy. This is very different from the fusiform, where there were significant relationships between similarity and all three behavioral measures. 
+
+```{r print correlations - within template encoding to delay - dfr}
+
+correlations[["correct_encoding_to_correct_delay"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template Encoding to Template Delay" = 1))
+
+```
+
+```{r correct encoding to correct delay - DFR}
+
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]]
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["L3_Acc"]]
+encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]]
+
+```
+
+## Comparing encoding to probe 
+
+Now, let's try encoding to probe. This measure does have any relationships with behavior, though some of the individual correlation measures can distinguish between high and low load trials.  
+
+```{r make encoding to probe plots - DFR}
+
+encoding_to_probe_plots <- list()
+
+for (i in c(7,11,13)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  encoding_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_encoding_to_correct_probe"]])
+colnames(temp_plot_data)[9] <- "correct_encoding_probe"
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs Omnibus Span")+
+  theme_classic()
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs BPRS")+
+  theme_classic()
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_encoding_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template encoding/probe vs L3 accuracy")+
+  theme_classic()
+
+```
+
+In these, graphs, if a correlation is black, it is below p < 0.05; if it is not, it is grey. 
+
+```{r calculate correlations - DFR}
+
+correlations = list()
+
+for (i in c(7,11,13)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_encoding_to_correct_probe"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_encoding_to_correct_probe"]] <- temp
+
+
+```
+
+
+### Individual Encoding to Individual Probe 
+
+No correlations here. 
+
+```{r print correlations - individual trial - DFR}
+
+correlations[["encoding_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Individual Probe" = 3)))
+
+```
+
+This measure can distinguish between load but not accuracy. 
+
+```{r individual trial encoding to probe t tests - DFR}
+
+encoding_to_probe_avg <- fisherz(similarity_temp[["encoding_to_probe_avg"]])
+
+t.test(encoding_to_probe_avg[,4],encoding_to_probe_avg[,2],paired=TRUE)
+t.test(encoding_to_probe_avg[,4],encoding_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r encoding to probe by trial - DFR}
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+
+### Individual Trial Encoding vs Correct Template Probe
+
+Significant correlation between similarity at the low load correct trials and span. 
+
+```{r print correlations - individual encoding to template probe - DFR}
+
+correlations[["encoding_to_correct_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["encoding_to_correct_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual Encoding to Template probe" = 3)))
+
+```
+
+This measure distinguishes load but not accuracy.  
+
+```{r encoding to correct probe t tests - DFR}
+
+encoding_to_correct_probe_avg <- fisherz(similarity_temp[["encoding_to_correct_probe_avg"]])
+
+t.test(encoding_to_correct_probe_avg[,4],encoding_to_correct_probe_avg[,2],paired=TRUE)
+t.test(encoding_to_correct_probe_avg[,4],encoding_to_correct_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r indiv encoding to correct probe - DFR}
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["encoding_to_correct_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct Template Encoding vs Individual Trial probe 
+
+No significant relationships. 
+
+```{r print correlations - template encoding to indiv probe - DFR}
+
+correlations[["correct_encoding_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_encoding_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template Encoding to probe" = 3)))
+
+```
+
+Not predictive of anything here. 
+
+```{r correct encoding to probe t tests - DFR}
+
+correct_encoding_to_probe_avg <- fisherz(similarity_temp[["correct_encoding_to_probe_avg"]])
+
+t.test(correct_encoding_to_probe_avg[,4],correct_encoding_to_probe_avg[,2],paired=TRUE)
+t.test(correct_encoding_to_probe_avg[,4],correct_encoding_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r correct encoding to indiv probe - DFR}
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     encoding_to_probe_plots[["correct_encoding_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct template encoding to correct template probe 
+
+Nothing significant. 
+
+```{r print correlations - within template - DFR}
+
+correlations[["correct_encoding_to_correct_probe"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template Encoding to Template Probe" = 1))
+
+```
+
+```{r correct encoding to correct probe - DFR}
+
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["omnibus"]]
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["L3_Acc"]]
+encoding_to_probe_plots[["correct_encoding_to_correct_probe"]][["BPRS"]]
+
+```
+
+## Comparing delay to probe 
+
+```{r make delay to probe plots - DFR}
+
+delay_to_probe_plots <- list()
+
+for (i in c(3,8,9)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  similarity_temp[[i]][similarity_temp[[i]]==0] <- NA
+  temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[[i]])
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["omnibus"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["L3_Acc"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_incorrect"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load incorrect`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Incorrect trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["low_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`low load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("Low Load - Correct trials")+
+    theme_classic()
+  
+  delay_to_probe_plots[[names(similarity_temp)[i]]][["BPRS"]][["high_load_correct"]] <- ggplot(data = temp_plot_data,aes(x=BPRS_TOT.x,y=`high load correct`))+
+    geom_point()+
+    stat_smooth(method="lm")+
+    ylab("Similarity")+
+    ggtitle("High Load - Correct trials")+
+    theme_classic()
+}
+
+temp_plot_data <- cbind.data.frame(data_to_plot,similarity_temp[["correct_delay_to_correct_probe"]])
+colnames(temp_plot_data)[9] <- "correct_delay_probe"
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["omnibus"]] <- ggplot(data = 
+                                                                                        temp_plot_data,aes(x=omnibus_span_no_DFR_MRI,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs Omnibus Span")+
+  theme_classic()
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["BPRS"]] <- ggplot(data = 
+                                                                                     temp_plot_data,aes(x=BPRS_TOT.x,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs BPRS")+
+  theme_classic()
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["L3_Acc"]] <- ggplot(data = 
+                                                                                       temp_plot_data,aes(x=XDFR_MRI_ACC_L3,y=correct_delay_probe))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylab("Similarity")+
+  ggtitle("Template delay/probe vs L3 accuracy")+
+  theme_classic()
+
+```
+
+In these, graphs, if a correlation is black, it is below p < 0.05; if it is not, it is grey. 
+
+```{r calculate correlations delay to probe - DFR}
+
+correlations = list()
+
+for (i in c(3,8,9)){
+  colnames(similarity_temp[[i]]) <- unlist(similarity_temp[[1]][[1]])
+  temp_list <- list(r = data.frame(matrix(nrow=4,ncol=6)), p = data.frame(matrix(nrow=4,ncol=6)))
+  
+  for (behav in seq.int(2,7)){
+    for (sim in seq.int(1,4)){ 
+      temp_corr <- cor.test(similarity_temp[[i]][,sim],data_to_plot[,behav])
+      temp_list[["r"]][sim,behav-1] <- temp_corr$estimate
+      temp_list[["p"]][sim,behav-1] <- temp_corr$p.value
+    }
+  }
+  
+  colnames(temp_list[["r"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["r"]]) <- colnames(similarity_temp[[i]])
+  colnames(temp_list[["p"]]) <- colnames(data_to_plot)[2:7]
+  rownames(temp_list[["p"]]) <- colnames(similarity_temp[[i]])
+  
+  
+  correlations[[names(similarity_temp)[i]]] <- temp_list
+  
+}
+temp <- data.frame(r=matrix(nrow=6,ncol=1),p=matrix(nrow=6,ncol=1))
+rownames(temp) <- colnames(data_to_plot)[2:7]
+
+
+for (behav in seq.int(2,7)){
+  temp_corr <- cor.test(similarity_temp[["correct_delay_to_correct_probe"]],data_to_plot[,behav])
+  temp$r[behav-1] <- temp_corr$estimate
+  temp$p[behav-2] <- temp_corr$p.value
+}
+
+correlations[["correct_delay_to_correct_probe"]] <- temp
+
+
+```
+
+
+### Individual delay to Individual Probe 
+
+Here, we see a significant relationship between similarity at low load correct and accuracy. 
+
+```{r print correlations - delay to probe - DFR}
+
+correlations[["delay_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["delay_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual delay to Individual Probe" = 3)))
+
+```
+
+Can distinguish between load but not accuracy. 
+
+```{r individual trial delay to probe t tests - DFR}
+
+delay_to_probe_avg <- fisherz(similarity_temp[["delay_to_probe_avg"]])
+
+t.test(delay_to_probe_avg[,4],delay_to_probe_avg[,2],paired=TRUE)
+t.test(delay_to_probe_avg[,4],delay_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r delay to probe by trial - DFR}
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+
+### Individual Trial Delay vs Correct Template Probe
+
+No relationships here.
+
+```{r print correlations - individual delay to template probe - DFR}
+
+correlations[["delay_to_correct_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["delay_to_correct_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Individual delay to Template probe" = 3)))
+
+```
+
+```{r delay to correct probe t tests - DFR}
+
+delay_to_correct_probe_avg <- fisherz(similarity_temp[["delay_to_correct_probe_avg"]])
+
+t.test(delay_to_correct_probe_avg[,4],delay_to_correct_probe_avg[,2],paired=TRUE)
+t.test(delay_to_correct_probe_avg[,4],delay_to_correct_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r indiv delay to correct probe - DFR}
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["delay_to_correct_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct Template delay vs Individual Trial probe 
+
+Significant relationship between similarity on high load incorrect trials and span. 
+
+```{r print correlations - template delay to indiv probe - DFR}
+
+correlations[["correct_delay_to_probe_avg"]][["r"]] %>% 
+  mutate(
+    condition = row.names(.),
+    omnibus_span_no_DFR_MRI = cell_spec(omnibus_span_no_DFR_MRI, "html", 
+                                        color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$omnibus_span_no_DFR_MRI < 0.05, "black", "grey")),
+    XDFR_MRI_ACC_L3 = cell_spec(XDFR_MRI_ACC_L3, "html", 
+                                color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$XDFR_MRI_ACC_L3 < 0.05, "black", "grey")),
+    BPRS_TOT.x = cell_spec(BPRS_TOT.x, "html", 
+                           color =ifelse(correlations[["correct_delay_to_probe_avg"]][["p"]]$BPRS_TOT.x < 0.05, "black", "grey"))
+  ) %>% 
+  select(condition,omnibus_span_no_DFR_MRI,XDFR_MRI_ACC_L3,BPRS_TOT.x) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>% 
+  add_header_above((c(" ", "Template delay to probe" = 3)))
+
+```
+
+Can distinguish between load but not accuracy. 
+
+```{r correct delay to probe t tests - DFR}
+
+correct_delay_to_probe_avg <- fisherz(similarity_temp[["correct_delay_to_probe_avg"]])
+
+t.test(correct_delay_to_probe_avg[,4],correct_delay_to_probe_avg[,2],paired=TRUE)
+t.test(correct_delay_to_probe_avg[,4],correct_delay_to_probe_avg[,3],paired=TRUE)
+
+```
+
+```{r correct delay to indiv probe - DFR}
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["omnibus"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs omnibus")
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["L3_Acc"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs High Load Accuracy")
+
+(delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["high_load_correct"]] + delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["high_load_incorrect"]]) /
+  (delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["low_load_correct"]] + 
+     delay_to_probe_plots[["correct_delay_to_probe_avg"]][["BPRS"]][["low_load_incorrect"]])+
+  plot_annotation(title = "Individual trials vs BPRS Total")
+
+```
+
+### Correct template delay to correct template probe 
+
+Very small correlation between accuracy and similarity, but is significant. 
+
+```{r print correlations - correct delay to correct probe - DFR}
+
+correlations[["correct_delay_to_correct_probe"]][c(2,3,5),] %>% 
+  mutate(
+    condition = row.names(.),
+    r = cell_spec(r, "html", 
+                  color =ifelse(p < 0.05, "black", "grey"))
+  )  %>% 
+  select(condition,r) %>%
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) %>%
+  add_header_above(c(" ", "Template delay to Template Probe" = 1))
+
+```
+
+```{r correct delay to correct probe - DFR}
+
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["omnibus"]]
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["L3_Acc"]]
+delay_to_probe_plots[["correct_delay_to_correct_probe"]][["BPRS"]]
+
+```
+

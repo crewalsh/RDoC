@@ -1,0 +1,689 @@
+---
+title: "import data"
+author: "Catherine Walsh"
+date: "3/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries}
+library(tidyverse)
+library(readxl)
+library(dplyr)
+library(reshape)
+library(R.matlab)
+library(psych)
+library(rmatio)
+
+source('helper_fxns/clean_data.R')
+source('helper_fxns/select_out_ROI.R')
+
+```
+
+```{r import p200 behavioral data, message=FALSE}
+
+pIDs_pop200 <- read_excel("~/Documents/UCLA/Research/RDoC/pop200.xls", col_names = FALSE)
+query_export <- read_excel("~/Documents/UCLA/Research/RDoC/RDoC_CATHERINE_P200_USEME.xlsx")
+
+#import p200 data -- need to fill in from JB's document because not all subjects have ePrime data on database 
+p200_data <- query_export[query_export$PTID %in% pIDs_pop200$...1,]
+all_behav <- read_excel("~/Documents/UCLA/Research/RDoC/RDoC_Merged_Behavior_pop200.xlsx")
+filling_in <- dplyr::select(all_behav,Xsub,XAOS_part_score,XAOS_INCLUSION,XLCD_K_MAX,XLCD_INCLUSION,XDPX_DPRIME,XDPX_INCLUSION,XDFR_EEG_cow_L3,XDFR_EEG_INCLUSION,XDFR_MRI_cow_L3,XDFR_MRI_INCLUSION,XRISE_Pr_item,XRISE_Pr_relat,XRISE_INCLUSION,Xscap_max_capac,Xscap_INCLUSION,XDFR_MRI_acc_L3,XDFR_MRI_acc_L1)
+
+#just double check that in the order of PT 
+
+p200_data <- p200_data[order(p200_data$PTID),]
+filling_in <- filling_in[order(filling_in$Xsub),]
+
+p200_data[192:200,2:16] <- filling_in[192:200,2:16]
+p200_data$XAOS_PART_SCORE <- as.numeric(filling_in$XAOS_part_score)
+
+p200_data$XDFR_MRI_ACC_L3 <- filling_in$XDFR_MRI_acc_L3
+p200_data$XDFR_MRI_ACC_L1 <- filling_in$XDFR_MRI_acc_L1
+
+#make any exclusions a NA
+p200_data$XAOS_PART_SCORE[p200_data$XAOS_INCLUSION==0] <-NA
+p200_data$XLCD_K_MAX[p200_data$XLCD_INCLUSION==0] <- NA
+p200_data$XDPX_DPRIME[p200_data$XDPX_INCLUSION==0] <-NA
+p200_data$XDFR_EEG_COW_L3[p200_data$XDFR_EEG_INCLUSION==0] <-NA
+p200_data$XDFR_MRI_COW_L3[p200_data$XDFR_MRI_INCLUSION==0] <-NA
+p200_data$XDFR_MRI_ACC_L3[p200_data$XDFR_MRI_INCLUSION==0] <-NA
+p200_data$XDFR_MRI_ACC_L1[p200_data$XDFR_MRI_INCLUSION==0] <-NA
+p200_data$XRISE_PR_ITEM[p200_data$XRISE_INCLUSION==0] <-NA
+p200_data$XRISE_PR_RELAT[p200_data$XRISE_INCLUSION==0] <-NA
+p200_data$XSCAP_MAX_CAPAC[p200_data$XSCAP_INCLUSION==0] <- NA
+
+#calculate BPRS total 
+BPRS <- p200_data[,27:50]
+BPRS$BPRS_tot <- rowSums(BPRS)
+
+#calculate clinical variables that are sums 
+p200_data$sum_lev1man <- p200_data$LEV1_MAN1+p200_data$LEV1_MAN2
+p200_data$OCI_RT_SUM <- p200_data$OCI_RT1+p200_data$OCI_RT2
+p200_data$PHQ_SS_SUM <- p200_data$PHQ_SS1+p200_data$PHQ_SS2
+
+#calculate clinical variables that require a little manipulation 
+PQ_Data <- p200_data[,54:85]
+K10_Data <- p200_data[,86:105]
+
+PQ_Sums <- matrix(nrow = 200, ncol = 16)
+K10_Sums <- matrix(nrow=200,ncol=10)
+count <- 1
+
+for (PQ in seq.int(1,31,2)){
+  for (subj in seq.int(1,200)){
+    if ((PQ_Data[subj,PQ] == 0)&!is.na(PQ_Data[subj,PQ])){
+      PQ_Data[subj,PQ+1]<-  0 
+    }
+    PQ_Sums[subj,count] <- as.numeric(PQ_Data[subj,PQ]+PQ_Data[subj,PQ+1])
+  }
+  count <- count +1
+}
+
+count = 1
+
+for (K10 in seq.int(1,19,2)){
+  for (subj in seq.int(1,200)){
+    if ((K10_Data[subj,K10] == 0) & !is.na(K10_Data[subj,K10])){
+      K10_Data[subj,K10+1] <- 0 
+    }
+    K10_Sums[subj,count] <- as.numeric(K10_Data[subj,K10]+K10_Data[subj,K10+1])
+  }
+  count=count+1
+}
+
+p200_data$PQ_TotalSum <- rowSums(PQ_Sums)
+p200_data$K10_Total_Sum <- rowSums(K10_Sums)
+
+#remove inclusion columns and unnecessary data 
+p200_data <- dplyr::select(p200_data,PTID,XAOS_PART_SCORE,XLCD_K_MAX,XDPX_DPRIME,XDFR_EEG_COW_L3,XDFR_MRI_COW_L3,XDFR_MRI_ACC_L3,XDFR_MRI_ACC_L1,XRISE_PR_ITEM,XRISE_PR_RELAT,XSCAP_MAX_CAPAC,SCORING_MATRIXREASONING_RAW,SCORING_LETNUMSEQ_RAW,ANALYSIS_DIGITSPANFWD_RAW,ANALYSIS_DIGITSPANBKW_RAW,ANALYSIS_DIGITSPANSEQ_RAW,VOCABULARY_TOTALRAWSCORE,WMS_SA_TOTSCORE,WMS_SYMS_TOTSCORE,     BPRS_ANX,BPRS_DEP,BPRS_DIST,PRIMARY_DIAGNOSIS,ANX_TS,EDD_TS,WHO_ST_S32,sum_lev1man,OCI_RT_SUM,PHQ_SS_SUM,PQ_TotalSum,K10_Total_Sum,X010701_GENDER,PX010101_AGE)
+p200_data$BPRS_TOT <- BPRS$BPRS_tot
+
+p200_data$PTID <- as.numeric(p200_data$PTID)
+
+```
+
+```{r load in fxl connectivity, message=FALSE, warning=FALSE}
+
+#get all filenames in folder
+allFiles <- list.files(path = "~/Documents/UCLA/Research/RDoC/RestingState/", pattern = "ZcorrROIs_GS_DT")
+
+#preallocate matrix 
+corrData <- data.frame(matrix(nrow = 36, ncol = 2))
+colnames(corrData) <- c("Network_1", "Network_2")
+
+#loop through all file names 
+for (file in seq.int(2,length(allFiles))){
+  #get the file name of the next file 
+  filePath <- paste("~/Documents/UCLA/Research/RDoC/RestingState/ZcorrROIs_ID",substr(allFiles[file],19,22),".txt", sep = "")
+  #read in the file name 
+  tempload <- read.delim(filePath, header = FALSE)
+  #get subject number 
+  subjNum <- tempload[1,1]
+  #pull out ROIs for col names; change col names 
+  newRowNames <- matrix(tempload$V2)
+  colnames(tempload)[3:8] <- newRowNames
+  #reshape from square to vector 
+  reshaped <- melt(tempload)
+  #put vector for subject in a big matrix holding all subjects 
+  corrData$newCol <- reshaped$value[7:42]
+  colnames(corrData)[file+1] <-subjNum
+}
+
+#add in labels
+corrData$Network_1 <- reshaped$V2[7:42]
+corrData$Network_2 <- reshaped$variable[7:42]
+
+#create colnames for transposed matrix 
+transposed_colNames <- matrix(nrow = 37, ncol=1)
+transposed_colNames[1,1] <- "PTID"
+
+for (index in (seq.int(1,36))){
+  transposed_colNames[index+1,1] <- paste(corrData$Network_1[index],corrData$Network_2[index],sep = "/")
+}
+
+#transpose matrix 
+pIDs <- data.frame(colnames(corrData)[3:length(corrData)])
+corrData_formatted <- data.frame(matrix(nrow = 208,ncol=37))
+colnames(corrData_formatted) <-transposed_colNames
+corrData_formatted$PID <- pIDs$colnames.corrData..3.length.corrData..
+
+corrData_formatted[,2:37] <- t(corrData[,3:210])
+corrData_formatted <- corrData_formatted[order(corrData_formatted$PID),]
+p200_networkCorr <- corrData_formatted[corrData_formatted$PID %in% pIDs_pop200$...1,]
+
+p200_RS <- dplyr::select(p200_networkCorr,PID,`Default/Default`,`Visual/Default`,`CinguloOperc/Default`,`DorsalAttn/Default`,`FrontoParietal/Default`,`VentralAttn/Default`,`Visual/Visual`,`CinguloOperc/Visual`,`DorsalAttn/Visual`,`FrontoParietal/Visual`,`VentralAttn/Visual`,`CinguloOperc/CinguloOperc`,`DorsalAttn/CinguloOperc`,`FrontoParietal/CinguloOperc`,`VentralAttn/CinguloOperc`,`DorsalAttn/DorsalAttn`,`FrontoParietal/DorsalAttn`,`VentralAttn/DorsalAttn`,`FrontoParietal/FrontoParietal`,`VentralAttn/FrontoParietal`,`VentralAttn/VentralAttn`)
+
+colnames(p200_RS)[1] <- 'PTID'
+
+p200_RS$PTID <- as.numeric(as.character(p200_RS$PTID))
+
+```
+
+```{r get in graph theory data, message=FALSE, warning=FALSE}
+
+#get all filenames in folder
+allFiles_BCT <- list.files(path = "~/Documents/UCLA/Research/RDoC/RestingState/", pattern = "BCT_Metrics_GS_DT")
+
+BCT_Data <- data.frame(matrix(nrow=206, ncol=11))
+colnames(BCT_Data) <- c("ID", "Degree Mean", "Strength_Mean", "Bet_Central_Mean","Participation_Coef_Mean", "Clustering_Coef_Mean","Local_Eff_Mean","Rich_Club_Coef_Mean","Global_Eff","Modularity_Louvain_N","Char_Path_Length")
+
+# load in each file, and put in a matrix 
+for (file in seq.int(1,length(allFiles_BCT)-1)){
+  filePath <- paste("~/Documents/UCLA/Research/RDoC/RestingState/BCT_Metrics_GS_DT_ID",substr(allFiles_BCT[file],21,24),".txt", sep = "")
+  tempload <- read.delim(filePath, header = FALSE)
+  BCT_Data[file,] <- tempload
+}
+
+p200_BCT <- BCT_Data[BCT_Data$ID %in% pIDs_pop200$...1,]
+p200_BCT <- p200_BCT[order(p200_BCT$ID),]
+
+p200_BCT_forCorr <- dplyr::select(p200_BCT,ID,Participation_Coef_Mean,Global_Eff,Modularity_Louvain_N)
+colnames(p200_BCT_forCorr)[1] <- 'PTID'
+
+```
+
+```{r read participation coefficent for individual networks, message=FALSE, warning=FALSE}
+
+# read in data 
+ParticCoeff <- read.delim("data/partic_coeff_indiv_networks_AUC.txt",header=FALSE)
+
+# get out IDs that we have 
+IDs <- ParticCoeff[1,2:207]
+
+# pre-allocate matrix and set it up 
+p200_indiv_network_ParticCoeff <- data.frame(matrix(ncol = 7, nrow = 206))
+networks <- c("CinguloOperc", "DorsalAttn", "VentralAttn", "Visual", "Default", "FrontoParietal")
+colnames(p200_indiv_network_ParticCoeff) <- c("PTID",networks)
+p200_indiv_network_ParticCoeff$PTID <- t(IDs)
+
+# loop through all data, select out a given network and take the mean across all nodes within a network 
+for (network in seq.int(1,6)){
+  temp <- ParticCoeff[ParticCoeff$V1 == networks[network],]
+  p200_indiv_network_ParticCoeff[,network+1] <- colMeans(temp[,2:207])
+}
+
+# select out only subjects in p200 and make dataframe pretty
+p200_indiv_network_ParticCoeff <- p200_indiv_network_ParticCoeff[p200_indiv_network_ParticCoeff$PTID %in% pIDs_pop200$...1,]
+p200_indiv_network_ParticCoeff <- p200_indiv_network_ParticCoeff[order(p200_indiv_network_ParticCoeff$PTID),]
+p200_indiv_network_ParticCoeff <- dplyr::select(p200_indiv_network_ParticCoeff,PTID,Default,CinguloOperc,FrontoParietal,DorsalAttn,VentralAttn,Visual)
+
+p200_indiv_network_ParticCoeff$PTID <- as.numeric(p200_indiv_network_ParticCoeff$PTID)
+
+```
+
+```{r get load effects from csvs -- HCP ROIs}
+
+#p200_delay_HCP/p200_cue_HCP are the same as ROI_loadEffect_cue_HCP/ROI_loadEffect_delay_HCP but have been z-scored and had outliers removed 
+
+ROI_loadEffect_cue_HCP <- read.csv("/Users/catherinewalsh/Documents/UCLA/Research/RDoC/ROI_loadEffect_cue_HCP.csv",header=TRUE)
+ROI_loadEffect_delay_HCP <- read.csv("/Users/catherinewalsh/Documents/UCLA/Research/RDoC/ROI_loadEffect_delay_HCP.csv",header=TRUE)
+p200_delay_HCP <- read.csv("/Users/catherinewalsh/Documents/UCLA/Research/RDoC/p200_delay_HCP.csv", header=TRUE)
+p200_cue_HCP <- read.csv("/Users/catherinewalsh/Documents/UCLA/Research/RDoC/p200_cue_HCP.csv", header=TRUE)
+
+# select relevant data 
+p200_delay_HCP <- p200_delay_HCP[,2:31]
+p200_cue_HCP <- p200_cue_HCP[,2:31]
+ROI_loadEffect_cue_HCP <- ROI_loadEffect_cue_HCP[,2:31]
+ROI_loadEffect_delay_HCP <- ROI_loadEffect_delay_HCP[,2:31]
+
+```
+
+```{r load in ROI load effects -- DFR and NS}
+
+#load in both sets of DFR and neurosynth ROIs 
+load_effects_DFR_NS <- readMat('data/FastBetaResults.mat')
+
+#get delay effects for DFR and neurosynth
+p200_delay_DFR <- data.frame(load_effects_DFR_NS[["Data"]][[1]][,2],load_effects_DFR_NS[["Data"]][[1]][,6])
+colnames(p200_delay_DFR) <- c('DFR_Load1_Delay', 'DFR_Load3_Delay')
+
+p200_delay_NS <- data.frame(load_effects_DFR_NS[["Data"]][[2]][,2],load_effects_DFR_NS[["Data"]][[2]][,6])
+colnames(p200_delay_NS) <- c('NS_Load1_Delay', 'NS_Load3_Delay')
+
+# calculate load effects 
+p200_delay_DFR$DFR_Load3_Load1 <- p200_delay_DFR$DFR_Load3_Delay - p200_delay_DFR$DFR_Load1_Delay
+p200_delay_NS$NS_Load3_Load1 <- p200_delay_NS$NS_Load3_Delay - p200_delay_NS$NS_Load1_Delay
+
+# put in single dataframe 
+p200_delay_avgs <- data.frame(p200_delay_DFR$DFR_Load3_Load1,p200_delay_NS$NS_Load3_Load1) 
+p200_delay_avgs <- cbind(load_effects_DFR_NS[["Data"]][[4]],p200_delay_avgs)
+colnames(p200_delay_avgs) <- c('PTID','DFR',"NS")
+
+#get cue effects for DFR and neurosynth 
+cue_DFR <- data.frame(load_effects_DFR_NS[["Data"]][[1]][,1],load_effects_DFR_NS[["Data"]][[1]][,5])
+colnames(cue_DFR) <- c('DFR_Load1_cue', 'DFR_Load3_cue')
+
+cue_NS <- data.frame(load_effects_DFR_NS[["Data"]][[2]][,1],load_effects_DFR_NS[["Data"]][[2]][,5])
+colnames(cue_NS) <- c('NS_Load1_cue', 'NS_Load3_cue')
+
+# calculate load effects 
+cue_DFR$DFR_Load3_Load1 <- cue_DFR$DFR_Load3_cue - cue_DFR$DFR_Load1_cue
+cue_NS$NS_Load3_Load1 <- cue_NS$NS_Load3_cue - cue_NS$NS_Load1_cue
+
+# put in single dataframe 
+p200_cue_avgs <- data.frame(cue_DFR$DFR_Load3_Load1,cue_NS$NS_Load3_Load1) 
+p200_cue_avgs <- cbind(load_effects_DFR_NS[["Data"]][[4]],p200_cue_avgs)
+colnames(p200_cue_avgs) <- c('PTID','DFR',"NS")
+
+```
+
+```{r load in individual ROIs from DFR/NS}
+
+#load in data and ROI names 
+indiv_load_effects_DFR_NS_all <- readMat('data/FastBetaResults_New.mat')
+indiv_ROI_names <- read.delim("data/ROI_names.txt", header=FALSE,colClasses = "character")
+
+#get rid of file type from ROI names 
+for (idx in seq.int(1,28)){
+  indiv_ROI_names[idx,1] <- strsplit(indiv_ROI_names[idx,1],".nii")
+}
+
+#put PTIDs in matrix -- delay 
+p200_indiv_ROI_DFR_delay <- data.frame(matrix(nrow = 170,ncol=29))
+p200_indiv_ROI_DFR_delay[,1] <- indiv_load_effects_DFR_NS_all[["Data"]][[2]]
+
+#put PTIDs in matrix -- cue 
+p200_indiv_ROI_delayDFR_cuePeriod <- data.frame(matrix(nrow = 170,ncol=29))
+p200_indiv_ROI_delayDFR_cuePeriod[,1] <- indiv_load_effects_DFR_NS_all[["Data"]][[2]]
+
+#put data in matrix 
+for (ROI in seq.int(1,28)){
+  for (partic in seq.int(1,170)){
+    p200_indiv_ROI_DFR_delay[partic,ROI+1] <- indiv_load_effects_DFR_NS_all[["Data"]][[ROI+2]][partic,6] - indiv_load_effects_DFR_NS_all[["Data"]][[ROI+2]][partic,2]
+  }
+}
+
+#set colnames 
+colnames(p200_indiv_ROI_DFR_delay)[1] <- "PTID"
+for (idx in seq.int(2,29)){
+  colnames(p200_indiv_ROI_DFR_delay)[idx] <- indiv_ROI_names[idx-1,1]
+}
+
+#repeat for cue 
+for (ROI in seq.int(1,28)){
+  for (partic in seq.int(1,170)){
+    p200_indiv_ROI_delayDFR_cuePeriod[partic,ROI+1] <- indiv_load_effects_DFR_NS_all[["Data"]][[ROI+2]][partic,5] - indiv_load_effects_DFR_NS_all[["Data"]][[ROI+2]][partic,1]
+  }
+}
+
+colnames(p200_indiv_ROI_delayDFR_cuePeriod)[1] <- "PTID"
+for (idx in seq.int(2,29)){
+  colnames(p200_indiv_ROI_delayDFR_cuePeriod)[idx] <- indiv_ROI_names[idx-1,1]
+}
+
+```
+
+```{r import load effects from cue period ROIs, echo=FALSE}
+
+cue_load_effects <- readMat('data/FastBetaResults_cue.mat')
+
+p200_indiv_ROI_DFR_cue <- data.frame(PTID=cue_load_effects[["Data"]][[2]], L_FEF_high=cue_load_effects[["Data"]][[3]][,5], L_FEF_low=cue_load_effects[["Data"]][[3]][,1], L_FEF_loadEffect=cue_load_effects[["Data"]][[3]][,5]-cue_load_effects[["Data"]][[3]][,1], L_insula_high=cue_load_effects[["Data"]][[4]][,5], L_insula_low=cue_load_effects[["Data"]][[4]][,1], L_insula_loadEffect=cue_load_effects[["Data"]][[4]][,5]-cue_load_effects[["Data"]][[4]][,1],L_IPS_high=cue_load_effects[["Data"]][[5]][,5],L_IPS_low=cue_load_effects[["Data"]][[5]][,1],L_IPS_loadEffect=cue_load_effects[["Data"]][[5]][,5]-cue_load_effects[["Data"]][[5]][,1],L_occipital_high=cue_load_effects[["Data"]][[6]][,5],L_occipital_low=cue_load_effects[["Data"]][[6]]
+                                     [,1],L_occipital_loadEffect = cue_L_occipital_loadEffect <- cue_load_effects[["Data"]][[6]][,5]-cue_load_effects[["Data"]][[6]][,1],R_FEF_high=cue_load_effects[["Data"]][[7]][,5],R_FEF_low=cue_load_effects[["Data"]][[7]][,1],R_FEF_loadEffect=cue_load_effects[["Data"]][[7]][,5]-cue_load_effects[["Data"]][[7]][,1],R_insula_high=cue_load_effects[["Data"]][[8]][,5],R_insula_low=cue_load_effects[["Data"]][[8]][,1],R_insula_loadEffect=cue_load_effects[["Data"]][[8]][,5]-cue_load_effects[["Data"]][[8]][,1],R_IPS_high=cue_load_effects[["Data"]][[9]][,5],R_IPS_low=cue_load_effects[["Data"]][[9]][,1],R_IPS_loadEffect=cue_load_effects[["Data"]][[9]][,5]-cue_load_effects[["Data"]][[9]][,1],R_MFG_high=cue_load_effects[["Data"]][[10]][,5],R_MFG_low=cue_load_effects[["Data"]][[10]][,1],R_MFG_loadEffect=cue_load_effects[["Data"]][[10]][,5]-cue_load_effects[["Data"]][[10]][,1],R_occipital_high=cue_load_effects[["Data"]][[11]][,5],R_occipital_low=cue_load_effects[["Data"]][[11]][,1],R_occipital_loadEffect=cue_load_effects[["Data"]][[11]][,5]-cue_load_effects[["Data"]][[11]][,1],R_preSMA_high=cue_load_effects[["Data"]][[12]][,5],R_preSMA_low=cue_load_effects[["Data"]][[12]][,1],R_preSMA_loadEffect=cue_load_effects[["Data"]][[12]][,5]-cue_load_effects[["Data"]][[12]][,1])
+
+probe_load_effects <- readMat('data/FastBetaResults_probe.mat')
+
+p200_indiv_ROI_DFR_probe <- data.frame(PTID=probe_load_effects[["Data"]][[2]],dmPFC_high=probe_load_effects[["Data"]][[3]][,6],dmPFC_low=probe_load_effects[["Data"]][[3]][,3],dmPFC_loadEffect=probe_load_effects[["Data"]][[3]][,5]-probe_load_effects[["Data"]][[3]][,1],L_aMFG_high=probe_load_effects[["Data"]][[4]][,5],L_aMFG_low=probe_load_effects[["Data"]][[4]][,1],L_aMFG_loadEffect=probe_load_effects[["Data"]][[4]][,5]-probe_load_effects[["Data"]][[4]][,1],L_dlPFC_high=probe_load_effects[["Data"]][[5]][,5],L_dlPFC_low=probe_load_effects[["Data"]][[5]][,1],L_dlPFC_loadEffect=probe_load_effects[["Data"]][[5]][,5]-probe_load_effects[["Data"]][[5]][,1],L_insula_high=probe_load_effects[["Data"]][[6]][,5],L_insula_low=probe_load_effects[["Data"]][[6]][,1],L_insula_loadEffect=probe_load_effects[["Data"]][[6]][,5]-probe_load_effects[["Data"]][[6]][,1],L_IPS_high=probe_load_effects[["Data"]][[7]][,5],L_IPS_low=probe_load_effects[["Data"]][[7]][,1],L_IPS_loadEffect=probe_load_effects[["Data"]][[7]][,5]-probe_load_effects[["Data"]][[7]][,1],R_dlPFC_high=probe_load_effects[["Data"]][[8]][,5],R_dlPFC_low=probe_load_effects[["Data"]][[8]][,1],R_dlPFC_loadEffect=probe_load_effects[["Data"]][[8]][,5]-probe_load_effects[["Data"]][[8]][,1],R_insula_high=probe_load_effects[["Data"]][[9]][,5],R_insula_low=probe_load_effects[["Data"]][[9]][,1],R_insula_loadEffect=probe_load_effects[["Data"]][[9]][,5]-probe_load_effects[["Data"]][[9]][,1],R_OFC_high=probe_load_effects[["Data"]][[10]][,5],R_OFC_low=probe_load_effects[["Data"]][[10]][,1],R_OFC_loadEffect=probe_load_effects[["Data"]][[10]][,5]-probe_load_effects[["Data"]][[10]][,1])
+
+```
+
+```{r import load effects from delay, cue and probe period load effect masks} 
+
+load_effects_full_mask <- readMat('data/FastBetaResults_New2.mat')
+
+cue_mask <- load_effects_full_mask[["Data"]][[3]]
+probe_mask <- load_effects_full_mask[["Data"]][[4]]
+delay_mask <- load_effects_full_mask[["Data"]][[5]]
+
+
+#this is all coming from model 3 so probe is split into match and no match -- only choosing data from match 
+p200_DFR_full_mask <- data.frame(PTID=load_effects_full_mask[["Data"]][[2]], cue_high=cue_mask[,5], 
+                                 cue_low=cue_mask[,1],cue_loadEffect=cue_mask[,5]-cue_mask[,1],
+                                 delay_high=delay_mask[,6], delay_low=delay_mask[,2], 
+                                 delay_loadEffect=delay_mask[,6]-delay_mask[,2],
+                                 probe_high=probe_mask[,7],probe_low=probe_mask[,3],
+                                 probe_loadEffect=probe_mask[,7]-probe_mask[,3])
+
+```
+
+```{r load effects from Yeo ROIs, echo=FAlSE}
+
+Yeo1 <- readMat('data/FastBetaResults_Yeo_ROIs_All.mat')
+Yeo2 <- readMat('data/FastBetaResults_Yeo_ROIs_All2.mat')
+
+temp <- unique(c(Yeo1,Yeo2))
+
+temp_yeo <- list()
+all_yeo <- list()
+
+for (idx in seq.int(1,6)){
+  temp_yeo[["Data"]][[1]][[idx]] <- Yeo1[["Data"]][[1]][[idx]]
+}
+
+temp_yeo[["Data"]][[2]] <- c(Yeo2[["Data"]][[2]][1:110],Yeo1[["Data"]][[2]])
+
+for (idx in seq.int(3,35)){
+  temp_yeo[["Data"]][[idx]] <- rbind(Yeo2[["Data"]][[idx]][1:110,1:6],Yeo1[["Data"]][[idx]][1:60,1:6])
+}
+
+yeo3 <- readMat("data/FastBetaResults_Yeo_ROIs_Quick.mat")
+yeo4 <- readMat("data/FastBetaResults_Yeo_ROIs_Quick2.mat")
+yeo5 <- readMat("data/FastBetaResults_Yeo_ROIs_notPFC_Par.mat")
+
+#data from all parietal and PFC ROIs -- this data comes from a few different files, so must reorganize  
+all_yeo <- temp_yeo[["Data"]][1:5]
+all_yeo[6:7] <- yeo3[["Data"]][3:4]
+all_yeo[8:14] <- temp_yeo[["Data"]][6:12]
+all_yeo[15:16] <- yeo3[["Data"]][5:6]
+all_yeo[17:21] <- temp_yeo[["Data"]][13:17]
+all_yeo[22] <- yeo3[["Data"]][7]
+all_yeo[23:24] <- temp_yeo[["Data"]][18:19]
+all_yeo[25] <- yeo4[["Data"]][3]
+all_yeo[26:32] <- temp_yeo[["Data"]][20:26]
+all_yeo[33] <- yeo3[["Data"]][9]
+all_yeo[34:35] <- temp_yeo[["Data"]][27:28]
+all_yeo[36] <- yeo3[["Data"]][10]
+all_yeo[37:43] <- temp_yeo[["Data"]][29:35]
+
+all_yeo2 <- all_yeo[1:8]
+all_yeo2[9] <- yeo5[["Data"]][3]
+all_yeo2[10:19] <- all_yeo[9:18]
+all_yeo2[20:23] <- yeo5[["Data"]][4:7]
+all_yeo2[24:30] <- all_yeo[19:25]
+all_yeo2[31:32] <- yeo5[["Data"]][8:9]
+all_yeo2[33:48] <- all_yeo[26:41]
+all_yeo2[49:52] <- yeo5[["Data"]][10:13]
+all_yeo2[53:54] <- all_yeo[42:43]
+
+all_yeo <- all_yeo2
+
+Yeo_ROI_labels <- readMat('data/Yeo_ROI_labels.mat')
+Yeo_ROI_labels <- Yeo_ROI_labels[["Yeo.ROIs"]]
+```
+
+```{r reshape Yeo data into something useable, echo=FALSE}
+
+p200_Yeo_delay <- data.frame(matrix(nrow=170,ncol=53))
+
+p200_Yeo_delay[,1]<- all_yeo[[2]]
+colnames(p200_Yeo_delay)[1] <- "PTID"
+
+for (idx in seq.int(3,54)){
+  p200_Yeo_delay[,idx-1] <- all_yeo[[idx]][,5] - all_yeo[[idx]][,2]
+  colnames(p200_Yeo_delay)[idx-1] <- Yeo_ROI_labels[[idx]][[1]]
+}
+
+```
+
+
+```{r import load effects from other ROIs, echo=FALSE}
+
+# load in ROI effects
+ROI_effects <- read_excel("~/Documents/UCLA/Research/RDoC/RDoC_CATHERINE_ROI.xlsx")
+# select out p200 fMRI data
+ROI_effects <- ROI_effects[ROI_effects$PTID %in% p200_indiv_ROI_DFR_cue$PTID,]
+# select out the conditions we care about -- everything but probe, no match
+ROI_effects <- ROI_effects[,c(1:5,7:9)]
+
+p200_FFA <- select_out_ROI("R_FFA", "L_FFA", ROI_effects)
+p200_HPC_Post <- select_out_ROI("RightHPC_Post", "LeftHPC_Post", ROI_effects)
+p200_HPC_Med <- select_out_ROI("RightHPC_Med", "LeftHPC_Med", ROI_effects)
+p200_HPC_Ant <- select_out_ROI("RightHPC_Ant", "LeftHPC_Ant", ROI_effects)
+
+# make PTID numeric 
+p200_FFA$PTID <- as.numeric(p200_FFA$PTID)
+p200_HPC_Ant$PTID <- as.numeric(p200_HPC_Ant$PTID)
+p200_HPC_Med$PTID <- as.numeric(p200_HPC_Med$PTID)
+p200_HPC_Post$PTID <- as.numeric(p200_HPC_Post$PTID)
+
+# select out only real values - we don't have data for subject 1024 
+p200_FFA <- p200_FFA[1:169,]
+p200_HPC_Ant <- p200_HPC_Ant[1:169,]
+p200_HPC_Med <- p200_HPC_Med[1:169,]
+p200_HPC_Post <- p200_HPC_Post[1:169,]
+
+
+
+```
+
+```{r get all RS data}
+
+fMRI_subjs <- p200_indiv_ROI_DFR_delay$PTID[c(1:9,11:170)]
+
+
+p200_all_RS <- data.frame(matrix(nrow=169,ncol=12))
+colnames(p200_all_RS)[1] <- "PTID"
+p200_all_RS$PTID <- fMRI_subjs
+label1 <- c("FPCN","DMN","DAN","VAN","CO","visual","FPCN","FPCN","FPCN","FPCN","FPCN")
+label2 <- c("FPCN","DMN","DAN","VAN","CO","visual","DMN","DAN","VAN","CO","visual")
+coord1 <- list(c(143:166),c(70:110),c(111:142),c(310:332),c(25:64),c(340:378),c(143:166),c(143:166),c(143:166),c(143:166),c(143:166))
+coord2 <- list(c(143:166),c(70:110),c(111:142),c(310:332),c(25:64),c(340:378),c(70:110),c(111:142),c(310:332),c(25:64),c(340:378))
+
+for (subj in seq.int(1,169)){
+  temp <- read.mat(paste0("data/RS_data/Zmat_",fMRI_subjs[subj],".mat",sep=""))
+  for (cond in seq.int(1,11)){
+    mat <- temp[["Z"]][c(coord1[[cond]]),c(coord2[[cond]])]
+    mat[mat == Inf] <- NA
+    p200_all_RS[subj,cond+1] <- mean(mean(mat,na.rm=TRUE))
+  }
+}
+
+colnames(p200_all_RS)[2:12] <- paste(label1,label2,sep="_") 
+
+
+
+```
+
+
+```{r import beta series correlations}
+
+all_subj_beta_series <- read.mat("data/Suj_by_Cond.mat")
+beta_ROI_order <- read.mat("data/roi_order.mat")
+all_subj_beta_series <- all_subj_beta_series[["Suj_by_Cond"]]
+beta_ROI_order <- beta_ROI_order[["roi"]]
+
+label1 <- c("FPCN", "FPCN", "FPCN", "HPC")
+label2 <- c("FPCN", "HPC", "FFA", "FFA")
+coords1 <- list(c(3:6,9:14), c(3:6,9:14), c(3:6,9:14), c(22:27))
+coords2 <- list(c(3:6,9:14),c(22:27),c(28:29), c(28:29))
+temp_cols <- c("L1","L3","LE")
+
+p200_beta_conn_cue <- data.frame(matrix(nrow=169,ncol=13))
+colnames(p200_beta_conn_cue)[1:2] <- c("PTID")
+
+p200_beta_conn_delay <- data.frame(matrix(nrow=169,ncol=13))
+colnames(p200_beta_conn_delay)[1:2] <- c("PTID")
+
+for (cond in seq.int(1,4)){
+  
+  cond_cue_data <- data.frame(matrix(nrow=169,ncol=4))
+  colnames(cond_cue_data) <- c("PTID","L1","L3","LE")
+  
+  cond_delay_data <- data.frame(matrix(nrow=169,ncol=4))
+  colnames(cond_delay_data) <- c("PTID","L1","L3","LE")
+  
+  for (suj in seq.int(1,169)){
+    
+    
+    cond_cue_data_L1 <- all_subj_beta_series[[suj]][[1]][c(coords1[[cond]]),c(coords2[[cond]])]
+    cond_cue_data_L1[cond_cue_data_L1==Inf] <- NA
+    cond_cue_data_L3 <- all_subj_beta_series[[suj]][[4]][coords1[[cond]],coords2[[cond]]]
+    cond_cue_data_L3[cond_cue_data_L3==Inf] <- NA
+    
+    cond_cue_data$PTID[suj] <- fMRI_subjs[suj]
+    cond_cue_data$L1[suj] <- mean(mean(cond_cue_data_L1,na.rm=TRUE))
+    cond_cue_data$L3[suj] <- mean(mean(cond_cue_data_L3,na.rm=TRUE))
+    cond_cue_data$LE[suj] <- mean(mean(cond_cue_data_L3 - cond_cue_data_L1,na.rm=TRUE))
+    
+    cond_delay_data_L1 <- all_subj_beta_series[[suj]][[2]][coords1[[cond]],coords2[[cond]]]
+    cond_delay_data_L1[cond_delay_data_L1==Inf] <- NA
+    cond_delay_data_L3 <- all_subj_beta_series[[suj]][[5]][coords1[[cond]],coords2[[cond]]]
+    cond_delay_data_L3[cond_delay_data_L3==Inf] <- NA
+    
+    cond_delay_data$PTID[suj] <- fMRI_subjs[suj]
+    cond_delay_data$L1[suj] <- mean(mean(cond_delay_data_L1,na.rm=TRUE))
+    cond_delay_data$L3[suj] <- mean(mean(cond_delay_data_L3,na.rm=TRUE))
+    cond_delay_data$LE[suj] <- mean(mean(cond_delay_data_L3 - cond_delay_data_L1,na.rm=TRUE))
+  }
+  
+  new_cols <- paste(label1[cond],label2[cond],temp_cols,sep="_")
+  cols_to_add <- (2+(cond-1)*3):(4+(cond-1)*3)
+  
+  colnames(p200_beta_conn_cue)[cols_to_add] <- new_cols
+  p200_beta_conn_cue[cols_to_add] <- cond_cue_data[2:4]
+  
+  colnames(p200_beta_conn_delay)[cols_to_add] <- new_cols
+  p200_beta_conn_delay[cols_to_add] <- cond_delay_data[2:4]  
+}
+
+p200_beta_conn_cue$PTID <- cond_cue_data$PTID
+p200_beta_conn_delay$PTID <- cond_delay_data$PTID
+
+```
+
+```{r load in cortical thickness measures}
+
+aparc_RH <- read.delim("data/RDoC_Merged_Aparc_RH_Formatted.txt", header=TRUE)
+aparc_LH <- read.delim("data/RDoC_Merged_Aparc_LH_Formatted.txt", header=TRUE)
+aseg <- read.delim("data/RDoC_Merged_Aseg_Formatted.txt", header=TRUE)
+
+# only use subjects in fMRI p200
+aparc_RH <- aparc_RH[aparc_RH$ID %in% p200_indiv_ROI_DFR_cue$PTID,]
+aparc_LH <- aparc_LH[aparc_LH$ID %in% p200_indiv_ROI_DFR_cue$PTID,]
+aseg <- aseg[aseg$ID %in% p200_indiv_ROI_DFR_cue$PTID,]
+
+# select out relevant variables
+aparc_LH_MTHICK <- aparc_LH[,c(1,grep("MTHICK",colnames(aparc_LH)))]
+aparc_RH_MTHICK <- aparc_RH[,c(1,grep("MTHICK",colnames(aparc_RH)))]
+
+aseg <- aseg[,c(1,6:10,14:19,22:25,34:39,43:44)]
+
+```
+
+```{r load FA data}
+
+FA_Data <- read_excel("~/Documents/UCLA/Research/RDoC/Extracted_Data_JHU_25percents.xlsx")
+FA_Data$"Global FA" <- rowMeans(FA_Data[,2:21])
+FA_Data <- data.frame(FA_Data[order(FA_Data$ID),])
+colnames(FA_Data)[1] <- 'PTID'
+
+```
+
+
+```{r remove excluded MRI subjects}
+
+#load in lists of included subjects 
+included_subjs <- read_excel('~/Documents/UCLA/Research/RDoC/inclusion_IDs.xlsx')
+
+FA_Data <- FA_Data[FA_Data[,1] %in% included_subjs$Diffusion,]
+p200_RS <- p200_RS[p200_RS[,1] %in% included_subjs$`Resting State`,]
+p200_BCT <- p200_BCT[p200_BCT[,1] %in% included_subjs$`Resting State`,] 
+#need to figure out why we're starting with 196 subjects before we take out included subjects 
+p200_cue_HCP <- p200_cue_HCP[p200_cue_HCP[,1] %in% included_subjs$DFR,]
+p200_delay_HCP <- p200_delay_HCP[p200_delay_HCP[,1] %in% included_subjs$DFR,]
+
+```
+
+```{r create composite WM load effect for delay and cue periods}
+
+#delay period: include R FEF, L FEF, R DLPFC, L DLFPC, R aMFG, L aMFG, R IPS, L IPS, R mSPL 
+#cue period: include R FEF, R DLPFC, L DLPFC, R Ins, L Ins, R IFG, L IFG, R IPS, L IPS, R mSPL, L mSPL, SMA
+
+#select out areas of interest 
+delay_composite_HCP <- dplyr::select(data.frame(p200_delay_HCP),PTID,R_FEF,L_FEF,R_DLFPC,L_DLPFC,R_aMFG,L_aMFG,R_IPS,L_IPS,R_mSPL) 
+cue_composite_HCP <- dplyr::select(data.frame(p200_cue_HCP),PTID,R_FEF,R_DLFPC,L_DLPFC,R_Ins,L_Ins,R_IFJ,L_IFJ,R_IPS,L_IPS,R_mSPL,L_mSPL,SMA)
+
+# create composite  
+p200_composite_cue_HCP <- data.frame(cue_composite_HCP$PTID,rowMeans(cue_composite_HCP[2:13]))
+p200_composite_delay_HCP <- data.frame(delay_composite_HCP$PTID,rowMeans(delay_composite_HCP[2:10]))
+
+colnames(p200_composite_cue_HCP) <- c('PTID','composite cue load effect')
+colnames(p200_composite_delay_HCP) <- c('PTID','composite delay load effect')
+
+```
+
+```{r load in cortical thickness from full mask data}
+
+RH_ROI_thick_cue <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/RH_I0C11cue_model3_thresh_4_389_binary.txt")
+LH_ROI_thick_cue <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/LH_I0C11cue_model3_thresh_4_389_binary.txt")
+
+RH_ROI_thick_delay <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/RH_I0C11delay_model3_thresh_4_389_binary.txt")
+LH_ROI_thick_delay <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/LH_I0C11delay_model3_thresh_4_389_binary.txt")
+
+RH_ROI_thick_probe <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/RH_I0C11probe_model2_thresh_4_389_binary.txt")
+LH_ROI_thick_probe <- read.delim("~/Documents/Code/RDoC/cortical_thickness_fullMask/LH_I0C11probe_model2_thresh_4_389_binary.txt")
+
+RH_ROI_thick <- data.frame(matrix(nrow = 199,ncol=4))
+colnames(RH_ROI_thick) <- c("PTID","Cue","Delay","Probe")
+
+LH_ROI_thick <- data.frame(matrix(nrow = 199,ncol=4))
+colnames(LH_ROI_thick) <- c("PTID","Cue","Delay","Probe")
+
+for (idx in seq.int(1,199)){
+  R_temp <- strsplit(as.character(RH_ROI_thick_cue[idx,1])," ")
+  RH_ROI_thick$Cue[idx] <- R_temp[[1]][2]
+  RH_ROI_thick$PTID[idx] <- R_temp[[1]][1]
+  R_temp <- strsplit(as.character(RH_ROI_thick_delay[idx,1])," ")
+  RH_ROI_thick$Delay[idx] <- R_temp[[1]][2]
+  R_temp <- strsplit(as.character(RH_ROI_thick_probe[idx,1])," ")
+  RH_ROI_thick$Probe[idx] <- R_temp[[1]][2]
+  
+  L_temp <- strsplit(as.character(LH_ROI_thick_cue[idx,1])," ")
+  LH_ROI_thick$Cue[idx] <- L_temp[[1]][2]
+  LH_ROI_thick$PTID[idx] <- L_temp[[1]][1]
+  L_temp <- strsplit(as.character(LH_ROI_thick_delay[idx,1])," ")
+  LH_ROI_thick$Delay[idx] <- L_temp[[1]][2]
+  L_temp <- strsplit(as.character(LH_ROI_thick_probe[idx,1])," ")
+  LH_ROI_thick$Probe[idx] <- L_temp[[1]][2]
+  
+  
+}
+
+RH_ROI_thick_fxlSubjs <- RH_ROI_thick[RH_ROI_thick$PTID %in% p200_indiv_ROI_DFR_cue$PTID,]
+LH_ROI_thick_fxlSubjs <- LH_ROI_thick[LH_ROI_thick$PTID %in% p200_indiv_ROI_DFR_cue$PTID,]
+
+colnames(RH_ROI_thick_fxlSubjs) <- c("PTID","Cue_RH","Delay_RH","Probe_RH")
+colnames(LH_ROI_thick_fxlSubjs) <- c("PTID","Cue_LH","Delay_LH","Probe_LH")
+
+p200_DFR_fullMask_cortical_thickness <- merge(RH_ROI_thick_fxlSubjs,LH_ROI_thick_fxlSubjs)
+p200_DFR_fullMask_cortical_thickness <- sapply(p200_DFR_fullMask_cortical_thickness, as.numeric)
+p200_DFR_fullMask_cortical_thickness <- data.frame(p200_DFR_fullMask_cortical_thickness)
+
+
+```
+
+```{r load in EEG data, echo=FALSE, message=FALSE}
+
+EEG_data <- read.csv("~/Documents/UCLA/Research/RDoC/EEG_reduced_data.csv")
+EEG_data <- EEG_data[EEG_data$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]
+EEG_data[is.na(EEG_data)] <- NA
+
+EEG_data <- clean_data(EEG_data)
+p200_EEG_data <- EEG_data[c(1,4:26)]
+
+```
+
+```{r save files to be easily loaded later, eval=FALSE}
+
+
+save(list=c("p200_delay_HCP", "p200_cue_HCP", "p200_composite_delay_HCP", "p200_composite_cue_HCP"),file="data/load_effects_HCP.RData")
+
+save(list=c("p200_delay_DFR","p200_cue_avgs", "p200_delay_avgs", "p200_indiv_ROI_DFR_delay", "p200_indiv_ROI_delayDFR_cuePeriod", "p200_DFR_full_mask", "p200_indiv_ROI_DFR_cue", "p200_indiv_ROI_DFR_probe", "p200_FFA", "p200_HPC_Ant", "p200_HPC_Med", "p200_HPC_Post"),file="data/load_effects_DFR.RData")
+
+save(list=c("p200_delay_NS", "p200_cue_avgs", "p200_delay_avgs"),file="data/load_effects_NS.RData")
+
+save(list=c("p200_Yeo_delay"),file="data/load_effects_Yeo.RData")
+
+save(list=c("p200_DFR_fullMask_cortical_thickness", "aseg", "aparc_RH_MTHICK", "aparc_LH_MTHICK", "FA_Data"),file="data/structural_measures.RData")
+
+save(list=c("p200_RS", "p200_all_RS","p200_beta_conn_cue","p200_beta_conn_delay", "p200_BCT_forCorr", "p200_indiv_network_ParticCoeff"),file="data/connectivity_data.RData")
+
+save(list=c("p200_EEG_data"),file="data/EEG.RData")
+
+save(list=c("p200_data"),file="data/behav.RData")
+
+```
+

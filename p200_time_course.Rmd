@@ -1,0 +1,763 @@
+---
+title: "Time Course Analysis"
+author: "Catherine Walsh"
+date: "3/19/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This analysis focuses on investigating differences in the time course of BOLD activity (ie Rissman et al., 2009) during a delayed match to sample working memory task. Running this analysis allows us to look at temporal patterns of activity in a more nuanced way. Extracting the activity from a contrast from a GLM provides spatial information, but does not provide nuanced information about the time course of activity within that period. 
+
+As such, we extracted a model-free BOLD time course across the whole task from each of the regions identified from the GLM as showing load effects during the cue, delay or probe period. The data were minimally processed (ie filtering, detrending, mean norming and resampling to 10Hz), and plotted for all subjects. In addition, we also looked at the time courses for each of the working memory capacity groups to see whether the inverted U-shaped pattern in univariate activity that we saw in from the GLM also shows in the time courses. 
+
+As a note, the rectangles in the background reflect the cue, delay and probe periods (respectively), shifted forward 5s to account for hemodynamic delay so we can more easily visualize where different task periods fall. 
+
+```{r import data, scripts and libraries}
+
+library(R.matlab)
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+library(psych)
+library(plotly)
+library(patchwork)
+
+load('data/behav.RData')
+load('data/split_groups_info.RData')
+
+source('helper_fxns/load_in_ROI.R')
+source('helper_fxns/split_TC_into_groups.R')
+source('helper_fxns/create_TC_for_plot.R')
+source('helper_fxns/load_effect_corr.R')
+source('helper_fxns/prep_TC_corr_for_plot.R')
+source('helper_fxns/plot_TC_corrs_indiv_ROIs.R')
+
+# these times are based on when the actual cues were on the screen 
+rects <- data.frame(xstart=c(0,2.5,10),xend=c(2.5,10,12),col = factor(c("cue","delay","probe"),levels=c("cue","delay","probe")))
+
+# adjust for hemodynamic delay 
+rects$xstart <- rects$xstart+5
+rects$xend <- rects$xend+5
+
+```
+
+```{r load in time course data}
+
+basepath <- "~/Documents/UCLA/Research/RDoC/TimeCourseData/"
+
+# delay period 
+
+delay_ROI_list <- c("L_dlPFC", "L_aMFG", "L_dMFG", "L_IPS", "L_preSMA", "R_dlPFC", "R_dMFG",
+                    "R_IPS", "R_medParietal")
+
+delay_TCs <- load_in_ROI(basepath, delay_ROI_list)
+
+# cue 
+
+cue_ROI_list <- c("cue_R_preSMA", "cue_R_occipital", "cue_R_MFG", "cue_R_IPS", "cue_R_insula", 
+                  "cue_R_FEF", "cue_L_occipital", "cue_L_IPS", "cue_L_insula", "cue_L_FEF")
+
+cue_TCs <- load_in_ROI(basepath, cue_ROI_list)
+
+# probe 
+
+probe_ROI_list <- c("probe_R_OFC", "probe_R_insula", "probe_R_dlPFC", "probe_L_IPS", "probe_L_insula",
+                    "probe_L_dlPFC", "probe_L_aMFG", "probe_dmPFC")
+
+probe_TCs <- load_in_ROI(basepath, probe_ROI_list)
+
+```
+
+```{r split TCs into groups}
+
+allSubjs <- constructs_fMRI$PTID
+
+cue_TC_groups <- split_TC_into_groups(cue_TCs,WM_groups,allSubjs)
+delay_TC_groups <- split_TC_into_groups(delay_TCs,WM_groups,allSubjs)
+probe_TC_groups <- split_TC_into_groups(probe_TCs,WM_groups,allSubjs)
+
+```
+
+```{r prep TCs for plotting}
+
+cue_TC_for_plot <- create_TC_for_plot(cue_TC_groups)
+delay_TC_for_plot <- create_TC_for_plot(delay_TC_groups)
+probe_TC_for_plot <- create_TC_for_plot(probe_TC_groups)
+
+```
+
+# Plot time course 
+
+## L1 vs L3 
+
+First step is to compare just the high load vs low load time course. Some nice sanity checks here - the high load (in red) show consistently greater activity than the low low (black), particularly in the cue period. 
+
+### All subjects
+
+#### Cue Period
+
+```{r plot cue period L1 vs L3}
+
+
+for (ROI in seq.int(1,length(cue_TCs))){
+  print(ggplot(data=cue_TCs[[ROI]]$avg)+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L1),size=1) +
+          geom_line(aes(x=Time,y=L3),size=1,color="red")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(cue_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+#### Delay Period
+
+```{r plot delay period L1 vs L3}
+
+for (ROI in seq.int(1,length(delay_TCs))){
+  print(ggplot(data=delay_TCs[[ROI]]$avg)+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L1),size=1) +
+          geom_line(aes(x=Time,y=L3),size=1,color="red")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(delay_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+#### Probe Period 
+
+```{r plot probe period L1 vs L3}
+
+for (ROI in seq.int(1,length(probe_TCs))){
+  print(ggplot(data=probe_TCs[[ROI]]$avg)+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L1),size=1) +
+          geom_line(aes(x=Time,y=L3),size=1,color="red")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(probe_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+### WM groups 
+
+If we split the subjects into the working memory capacity groups, we start to see some differences across the capacity groups.
+
+In the cue period ROIs, there don't seem to be differences across groups in the low WM capacity subjects (dotted lines), but we start to see differences where the medium and high capacity subjects have higher BOLD activity than the low capacity subjects, particularly during the cue period. Some of the regions (L insula, L FEF) show a numerical inverted U shaped pattern. 
+
+In the delay period ROIs, the low load condition is similar to the cue period, with not many differences between the two groups. In the high load condition, however, we're tending to see a more clear inverted U shape function, with medium capacity subjects showing higher BOLD activity than the high and low capacity subjects. 
+
+During the probe period ROIs, we see a similar pattern to the cue ROIs, with minimal differences in the low load condition, and a mix of patterns in the high load condition. The only really prominent patterns are in the L aMFG, which shows high, sustained BOLD activity during the delay period, and the L dlPFC, which shows higher activity for medium and high capacity subjects vs low capacity subjects during the cue period. Additionally, the L insula and L IPS also show a slight inverted U-shape pattern during the cue period. 
+
+#### Cue 
+
+```{r plot TC by WM group for cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dotted")+
+          #geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"), aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=0.2)+
+          #geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"), aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=0.2)+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(cue_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+
+```
+
+#### Delay
+
+```{r plot TC by WM group for delay}
+
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dotted")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(delay_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+
+```
+
+#### Probe
+
+```{r plot TC by WM group for probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col, alpha =0.005),show.legend = FALSE)+
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L3"),aes(x=Time,y=Mean,color=level),size=1) +
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="L1"),aes(x=Time,y=Mean,color=level),size=1,linetype="dotted")+
+          ylab("Mean Activity") +
+          ggtitle(paste("L3 vs L1",names(probe_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+```
+
+## Load Effects 
+
+Only calculating these split based on working memory capacity groups, not for all subjects. 
+
+The load effects (high load activity - low load activity) show our effects much more clearly. 
+
+In almost all ROIs, we tend to see large load effects for the medium and high capacity groups, compared to small load effects in the low WM capacity groups. In the delay period, however, the load effects for the high capacity groups drop to be comparable to the low capacity subjects, while the medium capacity subjects maintain a large load effect. 
+
+### Cue
+
+```{r load effects - cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(cue_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+### Delay
+
+```{r load effects - delay}
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(delay_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+### Probe 
+
+```{r load effects - probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["long"]])+
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
+          geom_line(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+          ylab("Mean Activity") +
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+          ggtitle(paste("Load effects",names(probe_TCs)[ROI]))+
+          ylim(c(-.4,.5))  
+  )
+}
+
+```
+
+# Correlation of Omnibus Span with Time Course 
+
+Another interesting analysis that we can now conduct is how these time courses correlate to omnibus span across all subjects. This allows us to query whether different regions show different relationship with capacity across the time course of the task. For all subjects (n=168), the critical R value for p < 0.05 = 0.127 (not corrected for multiple comparisons). The dotted red line represents this mark. 
+
+In these plots, each line represents the time course of all subjects from a given ROI; plots are split by load and by which task period the ROIs are extracted from. Similar to before, rectangles representing the cue periods are shifted by 5s to account for hemodynamic delay. 
+
+Overall, there's an interesting finding where during the cue and probe periods, the low load activity has a negative (or zero) correlation with omnibus span, but the high load activity has a positive correlation with the same measure. We also aren't really seeing anything during the delay period - this warrants more investigation - is there something else that ~does~ correlate during the delay period? 
+
+Also, these correlations are comparable to when we use independently selected ROIs from Neurosynth, though they are not shown here.
+
+```{r calculate correlation of of data with omnibus span at a given time point}
+
+cue_TC_corr <- load_effect_corr(cue_TCs,constructs_fMRI$omnibus_span_no_DFR_MRI)
+delay_TC_corr <- load_effect_corr(delay_TCs, constructs_fMRI$omnibus_span_no_DFR_MRI)
+probe_TC_corr <- load_effect_corr(probe_TCs, constructs_fMRI$omnibus_span_no_DFR_MRI)
+
+```
+
+```{r prep TC correlations for plotting}
+
+cue_L1_TC_corr_for_plot <- prep_TC_corr_for_plot(cue_TC_corr,2)
+delay_L1_TC_corr_for_plot <- prep_TC_corr_for_plot(delay_TC_corr,2)
+probe_L1_TC_corr_for_plot <- prep_TC_corr_for_plot(probe_TC_corr,2)
+
+cue_L3_TC_corr_for_plot <- prep_TC_corr_for_plot(cue_TC_corr,7)
+delay_L3_TC_corr_for_plot <- prep_TC_corr_for_plot(delay_TC_corr,7)
+probe_L3_TC_corr_for_plot <- prep_TC_corr_for_plot(probe_TC_corr,7)
+
+cue_LE_TC_corr_for_plot <- prep_TC_corr_for_plot(cue_TC_corr,12)
+delay_LE_TC_corr_for_plot <- prep_TC_corr_for_plot(delay_TC_corr,12)
+probe_LE_TC_corr_for_plot <- prep_TC_corr_for_plot(probe_TC_corr,12)
+
+```
+
+## All Regions
+
+### L1 
+
+All of the regions in the cue ROIs show a negative correlation with omnibus span during the cue period. Only the L/R IPS and R/L dMFG show negative correlations during cue and probe period from the delay period ROIs. For the probe period ROIs, almost all regions show negative correlation with omnibus span during the cue period, with the strongest negative correlation in the L IPS. 
+
+```{r plot all ROI corr on a single graph - L1 }
+
+# re-define rectangles for use with plotly 
+
+rects_id <- factor(c("cue","delay","probe"))
+values <- data.frame(
+  id = rects_id,
+  value = c(1,2,3)
+)
+positions <- data.frame(
+  id = rep(rects_id,each=4),
+  x = c(0,0,2.5,2.5,2.5,2.5,10,10,10,10,12,12),
+  y = c(-.4,.4,.4,-.4,-.4,.4,.4,-.4,-.4,.4,.4,-.4)
+)
+
+# adjust for hemodynamic delay
+positions$x <- positions$x + 5
+
+datapoly <- merge(values, positions)
+
+cue_L1 <- ggplot(data=cue_L1_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Cue period correlation with omnibus span - L1")+
+  ylim(c(-.4,.4))
+
+delay_L1 <- ggplot(data=delay_L1_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Delay period correlation with omnibus span - L1")+
+  ylim(c(-.4,.4))
+
+probe_L1 <- ggplot(data=probe_L1_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Probe period correlation with omnibus span - L1")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_L1)
+ggplotly(delay_L1)
+ggplotly(probe_L1)
+
+```
+
+### L3 
+
+At the high load, there seems to be a different pattern of correlations. From the cue ROIs, almost all regions show a correlation during the cue period, though I'm not sure these would hold up to multiple corretions comparison. In the delay period, however, there is a negative correlation with omnibus span and the L/R occipital regions. Towards the probe period, we see correlations between omnibus span and L/R FEF, L/R insula. 
+
+In the delay ROIs, all we see is correlation between the L preSMA, L dlPFC and R medial parietal during the cue period, and L preSMA at the end of the delay period, moving into the probe period. 
+
+From the probe ROIs, we see correlation with omnibus span in the L/R dlPFC in the cue period, a negative correlation with the L dlPFC during delay period and correlation with L/R dlPFC and L/R insula, 
+
+```{r plot all ROI corr on a single graph - L3 }
+
+cue_L3 <- ggplot(data=cue_L3_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Cue period correlation with omnibus span - L3")+
+  ylim(c(-.4,.4))
+
+delay_L3 <- ggplot(data=delay_L3_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Delay period correlation with omnibus span - L3")+
+  ylim(c(-.4,.4))
+
+probe_L3 <- ggplot(data=probe_L3_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with omnibus span - L3")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_L3)
+ggplotly(delay_L3)
+ggplotly(probe_L3)
+
+```
+
+### Load Effect
+
+For the cue ROIs, all regions show that omnibus span correlates with BOLD signal during the cue, with L/R insula, L FEF and R MFG showing correlation during probe periods. Almost all of the regions show a slight negative correlation during the delay period, but I doubt it would hold up to multiple comparisons testing. 
+
+For the delay ROIs, we see a similar pattern, with all regions except for the L aMFG and L dMFG showing correlation with omnibus span during cue period, and the L preSMA, L aMFG, R/L dlPFC showing correlations during the probe period. 
+
+For probe ROIs, same idea. Almost all activity during the cue period are significant, vs R/L dlPFC, R/L insula and dmPFC during probe period. 
+
+
+```{r plot all ROI corr on a single graph - LE }
+
+cue_LE <- ggplot(data=cue_LE_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Cue period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+delay_LE <- ggplot(data=delay_LE_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Delay period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+probe_LE <- ggplot(data=probe_LE_TC_corr_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_LE)
+ggplotly(delay_LE)
+ggplotly(probe_LE)
+
+```
+
+## Individual ROI correlations 
+
+Much of the same information as above, just split out into different plots. Here, red = high load, black = low load, and the ribbon = 95% confidence interval. 
+
+### L1 vs L3 
+
+```{r make plot L1 vs L3 correlations}
+
+cue_act_plots <- plot_TC_corrs_indiv_ROIs(cue_TC_corr,"activity")
+delay_act_plots <- plot_TC_corrs_indiv_ROIs(delay_TC_corr,"activity")
+probe_act_plots <- plot_TC_corrs_indiv_ROIs(probe_TC_corr,"activity")
+```
+
+#### Cue 
+
+```{r cue activity plots}
+(cue_act_plots[[1]] + cue_act_plots[[2]])+
+  plot_annotation(title="Cue period L1 vs L3 activity correlated with omnibus span")
+(cue_act_plots[[3]] + cue_act_plots[[4]])
+(cue_act_plots[[5]] + cue_act_plots[[6]])
+(cue_act_plots[[7]] + cue_act_plots[[8]])
+(cue_act_plots[[9]] + cue_act_plots[[10]])
+
+```
+
+#### Delay
+
+```{r delay activity plots}
+(delay_act_plots[[1]] + delay_act_plots[[2]])+
+  plot_annotation(title="Delay period L1 vs L3 activity correlated with omnibus span")
+(delay_act_plots[[3]] + delay_act_plots[[4]])
+(delay_act_plots[[5]] + delay_act_plots[[6]])
+(delay_act_plots[[7]] + delay_act_plots[[8]])
+(delay_act_plots[[9]])
+```
+
+#### Probe
+
+```{r probe activity plots}
+(probe_act_plots[[1]] + probe_act_plots[[2]])+
+  plot_annotation(title="probe period L1 vs L3 activity correlated with omnibus span")
+(probe_act_plots[[3]] + probe_act_plots[[4]])
+(probe_act_plots[[5]] + probe_act_plots[[6]])
+(probe_act_plots[[7]] + probe_act_plots[[8]])
+
+```
+
+### Load Effects 
+
+```{r make plot LE correlations}
+
+cue_LE_plots <- plot_TC_corrs_indiv_ROIs(cue_TC_corr,"LE")
+delay_LE_plots <- plot_TC_corrs_indiv_ROIs(delay_TC_corr,"LE")
+probe_LE_plots <- plot_TC_corrs_indiv_ROIs(probe_TC_corr,"LE")
+```
+
+#### Cue 
+
+```{r cue LE plots}
+(cue_LE_plots[[1]] + cue_LE_plots[[2]])+
+  plot_annotation(title="Cue period LE correlated with omnibus span")
+(cue_LE_plots[[3]] + cue_LE_plots[[4]])
+(cue_LE_plots[[5]] + cue_LE_plots[[6]])
+(cue_LE_plots[[7]] + cue_LE_plots[[8]])
+(cue_LE_plots[[9]] + cue_LE_plots[[10]])
+
+```
+
+#### Delay
+
+```{r delay LE plots}
+(delay_LE_plots[[1]] + delay_LE_plots[[2]])+
+  plot_annotation(title="Delay period LE correlated with omnibus span")
+(delay_LE_plots[[3]] + delay_LE_plots[[4]])
+(delay_LE_plots[[5]] + delay_LE_plots[[6]])
+(delay_LE_plots[[7]] + delay_LE_plots[[8]])
+(delay_LE_plots[[9]])
+```
+
+#### Probe
+
+```{r probe LE plots}
+(probe_LE_plots[[1]] + probe_LE_plots[[2]])+
+  plot_annotation(title="probe period LE correlated with omnibus span")
+(probe_LE_plots[[3]] + probe_LE_plots[[4]])
+(probe_LE_plots[[5]] + probe_LE_plots[[6]])
+(probe_LE_plots[[7]] + probe_LE_plots[[8]])
+
+```
+
+# Correlation of High Load Accuracy with Time Course
+
+It seemed as though capacity only correlates with activity when there's something on the screen - ie cue or probe, but not during the delay period. Another question is whether something else correlates with activity during the delay period. First, let's test accuracy at high load. 
+
+```{r calculate correlation of of data with high load accuracy at a given time point}
+
+acc <- p200_data$XDFR_MRI_ACC_L3[p200_data$PTID %in% constructs_fMRI$PTID]
+
+cue_TC_corr_acc <- load_effect_corr(cue_TCs,acc)
+delay_TC_corr_acc <- load_effect_corr(delay_TCs, acc)
+probe_TC_corr_acc <- load_effect_corr(probe_TCs, acc)
+
+```
+
+```{r prep TC correlations with high load accuracy for plotting}
+
+cue_L1_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_acc,2)
+delay_L1_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_acc,2)
+probe_L1_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_acc,2)
+
+cue_L3_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_acc,7)
+delay_L3_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_acc,7)
+probe_L3_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_acc,7)
+
+cue_LE_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_acc,12)
+delay_LE_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_acc,12)
+probe_LE_TC_corr_acc_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_acc,12)
+
+```
+
+## Activity at High Load 
+
+It looks like delay period activity (especially from the delay period ROIs) correlates with accuracy at high load. Probe period ROIs seem to be a little mixed, with some showing sustained correlations during the delay period and into the probe period but others only showing correlations during the probe period. In contrast, cue period ROIs tend to be most correlated with high load accuracy during the cue period. 
+
+```{r plot all ROI corr with acc on a single graph - L3 }
+
+cue_L3_acc <- ggplot(data=cue_L3_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Cue period correlation with high load accuracy - L3")+
+  ylim(c(-.4,.4))
+
+delay_L3_acc <- ggplot(data=delay_L3_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Delay period correlation with high load accuracy - L3")+
+  ylim(c(-.4,.4))
+
+probe_L3_acc <- ggplot(data=probe_L3_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with high load accuracy - L3")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_L3_acc)
+ggplotly(delay_L3_acc)
+ggplotly(probe_L3_acc)
+
+```
+
+## Activity/Load Effect
+
+Same story here for delay period, though we see more of a sustained correlation with accuracy for the probe period ROIs. Pretty similar with the cue period ROIs, though 
+
+```{r plot all ROI corr with L3 acc on a single graph - LE }
+
+cue_LE_acc <- ggplot(data=cue_LE_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Cue period correlation with high load accuracy - LE")+
+  ylim(c(-.4,.4))
+
+delay_LE_acc <- ggplot(data=delay_LE_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Delay period correlation with high load accuracy - LE")+
+  ylim(c(-.4,.4))
+
+probe_LE_acc <- ggplot(data=probe_LE_TC_corr_acc_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with high load accuracy - LE")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_LE_acc)
+ggplotly(delay_LE_acc)
+ggplotly(probe_LE_acc)
+
+```
+
+# BPRS correlation with time course 
+
+Just out of curiousity to see if there's any relationship with activity. The only thing we really see here is a negative correlation between the load effects and some (but not all) the delay period ROIs during the late dealy/probe period. 
+
+```{r calculate correlation of of data with BPRS at a given time point}
+
+BPRS <- p200_clinical_zscores$BPRS_TOT[p200_clinical_zscores$PTID %in% constructs_fMRI$PTID]
+
+cue_TC_corr_BPRS <- load_effect_corr(cue_TCs,BPRS)
+delay_TC_corr_BPRS <- load_effect_corr(delay_TCs, BPRS)
+probe_TC_corr_BPRS <- load_effect_corr(probe_TCs, BPRS)
+
+```
+
+```{r prep TC correlations with BPRS for plotting}
+
+cue_L1_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_BPRS,2)
+delay_L1_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_BPRS,2)
+probe_L1_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_BPRS,2)
+
+cue_L3_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_BPRS,7)
+delay_L3_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_BPRS,7)
+probe_L3_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_BPRS,7)
+
+cue_LE_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(cue_TC_corr_BPRS,12)
+delay_LE_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(delay_TC_corr_BPRS,12)
+probe_LE_TC_corr_BPRS_for_plot <- prep_TC_corr_for_plot(probe_TC_corr_BPRS,12)
+
+```
+
+## BPRS correlation at High Load 
+
+```{r plot all ROI corr with BPRS on a single graph - L3 }
+
+cue_L3_BPRS <- ggplot(data=cue_L3_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Cue period correlation with BPRS - L3")+
+  ylim(c(-.4,.4))
+
+delay_L3_BPRS <- ggplot(data=delay_L3_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+  ylab("Correlation") +
+  ggtitle("Delay period correlation with BPRS - L3")+
+  ylim(c(-.4,.4))
+
+probe_L3_BPRS <- ggplot(data=probe_L3_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with BPRS - L3")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_L3_BPRS)
+ggplotly(delay_L3_BPRS)
+ggplotly(probe_L3_BPRS)
+
+```
+
+## BPRS/Load Effect
+
+```{r plot all ROI corr with BPRS on a single graph - LE }
+
+cue_LE_BPRS <- ggplot(data=cue_LE_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Cue period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+delay_LE_BPRS <- ggplot(data=delay_LE_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Delay period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+probe_LE_BPRS <- ggplot(data=probe_LE_TC_corr_BPRS_for_plot) +
+  geom_polygon(data=datapoly,aes(x=x,y=y, fill=value,group=id),show.legend =FALSE)+
+  geom_line(aes(x=Time,y=correlation,color=ROI),size=1)+
+  geom_line(aes(x=Time,y=0.127),size=1,color="red", linetype="dotted")+
+  geom_line(aes(x=Time,y=-0.127),size=1,color="red", linetype="dotted")+
+  ylab("Correlation") +
+  ggtitle("Probe period correlation with omnibus span - LE")+
+  ylim(c(-.4,.4))
+
+
+ggplotly(cue_LE_BPRS)
+ggplotly(delay_LE_BPRS)
+ggplotly(probe_LE_BPRS)
+
+```

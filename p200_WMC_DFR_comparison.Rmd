@@ -1,0 +1,763 @@
+---
+title: "WMC and DFR Split Groups Comparison"
+author: "Catherine Walsh"
+date: "4/8/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+So far, we've run a bunch of analyses on the data split two different ways - by the WM capacity scores and by the high load DFR performance. Below is a table of the summary of analyses: 
+
++----------------+----------------------+--------------------+
+| Measure        | WM                   | DFR                |
++================+======================+====================+
+| DFR delay LE   | inverted U           | linearly increases |
++----------------+----------------------+--------------------+
+| constructs     | linearly increases   | linearly increases |
++----------------+----------------------+--------------------+
+| clinical       | linearly decreases   | linearly decreases |
++----------------+----------------------+--------------------+
+| cue period     | asymptotic           | linearly increases |
+| full mask      | med,high > low in    | for L3 and LE      |
+|                | LE                   |                    |
++----------------+----------------------+--------------------+
+| delay period   | inverted U           | linearly increases |
+| full mask      | L3 and LE            | L3 and LE          |
++----------------+----------------------+--------------------+
+| delay period   | inverted U in LE     | linearly increases |
+| indiv ROIs     |                      |  in LE             |
++----------------+----------------------+--------------------+
+| probe period   | asymptotic           | linearly increases |
+| full mask      | med,high>low in LE   | in LE              |
++----------------+----------------------+--------------------+
+| FFA            | linearly increases   | linearly increases |
+|                | in L cue LE          | in L cue LE        |
++----------------+----------------------+--------------------+
+| HPC Posterior  | inverted U @ L3      | no effect          |
+|                | L cue, delay, probe  |                    |
++----------------+----------------------+--------------------+
+| RSFC           | no effect            | FPCN: med > high   |
+| within network |                      | VAN: low > high    |
++----------------+----------------------+--------------------+
+| RSFC           | inverted U           | no effects         |
+| across network | FPCN/CO              |                    |
++----------------+----------------------+--------------------+
+| Beta Series    | no effect            | linearly increases |
+| connectivity   |                      | L3: FPCN/FFA,      |
+| cue            |                      | FPCN/HPC, HPC/FFA  |
+|                |                      | LE: FPCN/FPCN,     |
+|                |                      | FPCN/FFA           |
++----------------+----------------------+--------------------+
+| Beta Series    | LE: inverted U in    | linearly decreases |
+| connectivity   | HPC/FFA              | L3: FPCN/HPC       |
+| delay          |                      |                    |
++----------------+----------------------+--------------------+
+| BCT measures   | mean participation   | no effect          |
+|                | coefficient:         |                    |
+|                | U shaped             |                    |
+|                | DMN: U shaped        |                    |
+|                | VAN: linear increase |                    |
++----------------+----------------------+--------------------+
+
+```{r load libraries, data and custom functions}
+
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(psych)
+library(patchwork)
+library(R.matlab)
+
+load('data/load_effects_DFR.RData')
+load('data/behav.RData')
+load('data/structural_measures.RData')
+load('data/connectivity_data.RData')
+load('data/DFR_split_groups_info.RData')
+load('data/split_WM_groups_fMRI.RData')
+
+source('helper_fxns/load_in_ROI.R')
+source('helper_fxns/split_TC_into_groups.R')
+source('helper_fxns/create_TC_for_plot.R')
+
+# these times are based on when the actual cues were on the screen 
+rects <- data.frame(xstart=c(0,2.5,10),xend=c(2.5,10,12),col = factor(c("cue","delay","probe"),levels=c("cue","delay","probe")))
+
+# adjust for hemodynamic delay 
+rects$xstart <- rects$xstart+5
+rects$xend <- rects$xend+5
+
+
+```
+
+# Regressions 
+
+Interestingly, it looks like there is ovearchingly a linear relationship between these measures and DFR performance, with an inverted U-shape relationship with capacity. Let's see if these relationships hold up when we include both of them in a model, especially for the ones where there is a significant relationship with both variables. For the WM capacity, we're going to add in a quadratic term to see if that fits the data. 
+
+We're also going to regress the effect of DFR accuracy out of omnibus span and see what the residuals look like plotted against our variables of interest. 
+
+```{r create a base data}
+
+base_data <- merge(p200_data,constructs_fMRI,by="PTID")
+# want to create a base data that we can include in models - DFR accuracy, WM capacity and gender, age and WHODAS scores as covariates 
+base_data <- dplyr::select(base_data,PTID,"XDFR_MRI_ACC_L3","omnibus_span_no_DFR_MRI","X010701_GENDER","PX010101_AGE","WHO_ST_S32")
+colnames(base_data) <- c("PTID","DFR_L3_ACC","omnibus_span", "gender", "age", "WHODAS")
+base_data$span_sq <- base_data$omnibus_span^2
+base_data <- merge(base_data,p200_demographics[,c(1,4)])
+
+# shift to dummy coding 
+base_data$SCANNER <- base_data$SCANNER - 1
+base_data$gender <- base_data$gender - 1 
+
+# one subject did not report gender - assign 0.5 as to not mess with the regression too much
+base_data$gender[73] <- 0.5
+
+# remove subjects with incomplete data 
+base_data <- base_data[c(1,90,92:105,107:170),]
+
+```
+
+For findings where DFR is significant, can try to regess it out of omnibus and plot that against variable of interest to see if inverted U shape is still present, since I'm not sure span^2 is the right measure. 
+
+```{r get omnibus residuals}
+
+omnibus.lm <- lm(omnibus_span ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= base_data)
+summary(omnibus.lm)
+
+base_data$omnibus_resid <- resid(omnibus.lm)
+
+```
+
+## Cue Period Load Effect
+
+```{r cue period full mask - LE }
+
+full_mask_data <- merge(base_data,p200_DFR_full_mask)
+
+cue_loadEffect_DFR.lm <- lm(cue_loadEffect ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(cue_loadEffect_DFR.lm)
+
+cue_loadEffect_span.lm <- lm(cue_loadEffect ~ omnibus_span + span_sq + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(cue_loadEffect_span.lm)
+
+cue_loadEffect_all.lm <- lm(cue_loadEffect ~ omnibus_span + span_sq + DFR_L3_ACC + gender + age + WHODAS + SCANNER, data = full_mask_data)
+summary(cue_loadEffect_all.lm)
+
+```
+
+```{r omnibus resid vs cue LE}
+
+no_resid <- ggplot(data = full_mask_data, aes(x=omnibus_span,y=cue_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR not regressed")
+
+resid <- ggplot(data = full_mask_data, aes(x=omnibus_resid,y=cue_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR regressed")
+
+no_resid + resid+
+  plot_annotation(title = "Cue Load Effect")
+
+cor.test(full_mask_data$omnibus_resid,full_mask_data$cue_loadEffect)
+
+
+```
+
+## Delay Period 
+
+Interestingly, the delay period is the only finding that had an inverted U-shape relationship with capacity that held up when we regressed out the effects of accuracy. 
+
+### High Load 
+
+```{r delay period full mask - L3}
+
+
+delay_high_DFR.lm <- lm(delay_high ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(delay_high_DFR.lm)
+
+delay_high_span.lm <- lm(delay_high ~ omnibus_span + span_sq + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(delay_high_span.lm)
+
+delay_high_all.lm <- lm(delay_high ~ omnibus_span + span_sq + DFR_L3_ACC + gender + age + WHODAS + SCANNER, data = full_mask_data)
+summary(delay_high_all.lm)
+
+
+```
+
+```{r omnibus resid vs delay L3}
+
+no_resid <- ggplot(data = full_mask_data, aes(x=omnibus_span,y=delay_high))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR not regressed")
+
+resid <- ggplot(data = full_mask_data, aes(x=omnibus_resid,y=delay_high))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR regressed")
+
+no_resid + resid+
+  plot_annotation(title = "Delay High Load")
+cor.test(full_mask_data$omnibus_resid,full_mask_data$delay_high)
+
+
+```
+
+### Load Effect
+
+```{r delay period full mask - LE}
+
+delay_loadEffect_DFR.lm <- lm(delay_loadEffect ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(delay_loadEffect_DFR.lm)
+
+delay_loadEffect_span.lm <- lm(delay_loadEffect ~ omnibus_span + span_sq + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(delay_loadEffect_span.lm)
+
+delay_loadEffect_all.lm <- lm(delay_loadEffect ~ omnibus_span + span_sq + DFR_L3_ACC + gender + age + WHODAS + SCANNER, data = full_mask_data)
+summary(delay_loadEffect_all.lm)
+
+```
+
+```{r omnibus resid vs delay LE}
+
+no_resid <- ggplot(data = full_mask_data, aes(x=omnibus_span,y=delay_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR not regressed")
+
+resid <- ggplot(data = full_mask_data, aes(x=omnibus_resid,y=delay_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR regressed")
+
+no_resid + resid+
+  plot_annotation(title = "Delay Load Effect")
+
+cor.test(full_mask_data$omnibus_resid,full_mask_data$delay_loadEffect)
+
+
+```
+
+## Probe Period LE
+
+```{r probe period full mask}
+
+probe_loadEffect_DFR.lm <- lm(probe_loadEffect ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(probe_loadEffect_DFR.lm)
+
+probe_loadEffect_span.lm <- lm(probe_loadEffect ~ omnibus_span + span_sq + gender + age + WHODAS + SCANNER, data= full_mask_data)
+summary(probe_loadEffect_span.lm)
+
+probe_loadEffect_all.lm <- lm(probe_loadEffect ~ omnibus_span + span_sq + DFR_L3_ACC + gender + age + WHODAS + SCANNER, data = full_mask_data)
+summary(probe_loadEffect_all.lm)
+
+```
+
+```{r omnibus resid vs probe LE}
+
+no_resid <- ggplot(data = full_mask_data, aes(x=omnibus_span,y=probe_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR not regressed")
+
+resid <- ggplot(data = full_mask_data, aes(x=omnibus_resid,y=probe_loadEffect))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR regressed")
+
+no_resid + resid+
+  plot_annotation(title = "Probe Load Effect")
+
+cor.test(full_mask_data$omnibus_resid,full_mask_data$probe_loadEffect)
+
+```
+
+## FFA
+
+Looking at the load effect in the L FFA during the cue period. 
+
+```{r FFA}
+
+FFA_data <- merge(base_data,p200_FFA)
+
+FFA_loadEffect_DFR.lm <- lm(L_CUE_LE ~ DFR_L3_ACC + gender + age + WHODAS + SCANNER, data= FFA_data)
+summary(FFA_loadEffect_DFR.lm)
+
+FFA_loadEffect_span.lm <- lm(L_CUE_LE ~ omnibus_span + gender + age + WHODAS + SCANNER, data= FFA_data)
+summary(FFA_loadEffect_span.lm)
+
+FFA_loadEffect_all.lm <- lm(L_CUE_LE ~ omnibus_span +  DFR_L3_ACC + gender + age + WHODAS + SCANNER, data = FFA_data)
+summary(FFA_loadEffect_all.lm)
+
+
+```
+
+```{r omnibus resid vs L FFA cue LE}
+
+no_resid <- ggplot(data = FFA_data, aes(x=omnibus_span,y=L_CUE_LE))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR not regressed")
+
+resid <- ggplot(data = FFA_data, aes(x=omnibus_resid,y=L_CUE_LE))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  ggtitle("DFR regressed")
+
+no_resid + resid+
+  plot_annotation(title = "L FFA - cue LE")
+
+cor.test(FFA_data$omnibus_resid,FFA_data$L_CUE_LE)
+
+```
+
+# Time courses 
+
+```{r create 6 groups}
+
+HL <- split_constructs[["low"]][split_constructs[["low"]]$PTID %in% DFR_median_split_groups[["high"]]$PTID,]
+HL$level <- "HL"
+HM <- split_constructs[["med"]][split_constructs[["med"]]$PTID %in% DFR_median_split_groups[["high"]]$PTID,]
+HM$level <- "HM"
+HH <- split_constructs[["high"]][split_constructs[["high"]]$PTID %in% DFR_median_split_groups[["high"]]$PTID,]
+HH$level <- "HH"
+
+LL <- split_constructs[["low"]][split_constructs[["low"]]$PTID %in% DFR_median_split_groups[["low"]]$PTID,]
+LL$level <- "LL"
+LM <- split_constructs[["med"]][split_constructs[["med"]]$PTID %in% DFR_median_split_groups[["low"]]$PTID,]
+LM$level <- "LM"
+LH <- split_constructs[["high"]][split_constructs[["high"]]$PTID %in% DFR_median_split_groups[["low"]]$PTID,]
+LH$level <- "LH"
+
+things_to_hist <- rbind(HL,HM,HH,LL,LM,LH)
+
+six_groups <- list(HL = data.frame(HL), HM = data.frame(HM), HH = data.frame(HH), LL = data.frame(LL), LM = data.frame(LM), LH = data.frame(LH), all = data.frame(things_to_hist))
+
+```
+
+```{r load in time course data}
+
+basepath <- "~/Documents/UCLA/Research/RDoC/TimeCourseData/"
+
+# delay period 
+
+delay_ROI_list <- c("L_dlPFC", "L_aMFG", "L_dMFG", "L_IPS", "L_preSMA", "R_dlPFC", "R_dMFG",
+                    "R_IPS", "R_medParietal")
+
+delay_TCs <- load_in_ROI(basepath, delay_ROI_list)
+
+# cue 
+
+cue_ROI_list <- c("cue_R_preSMA", "cue_R_occipital", "cue_R_MFG", "cue_R_IPS", "cue_R_insula", 
+                  "cue_R_FEF", "cue_L_occipital", "cue_L_IPS", "cue_L_insula", "cue_L_FEF")
+
+cue_TCs <- load_in_ROI(basepath, cue_ROI_list)
+
+# probe 
+
+probe_ROI_list <- c("probe_R_OFC", "probe_R_insula", "probe_R_dlPFC", "probe_L_IPS", "probe_L_insula",
+                    "probe_L_dlPFC", "probe_L_aMFG", "probe_dmPFC")
+
+probe_TCs <- load_in_ROI(basepath, probe_ROI_list)
+
+```
+
+```{r split TCs into groups}
+
+allSubjs <- constructs_fMRI$PTID
+
+split_cue_six_groups <- split_TC_into_groups(cue_TCs,six_groups,allSubjs,group_names=c("HL","HM","HH", "LL", "LM", "LH"))
+split_delay_six_groups <- split_TC_into_groups(delay_TCs,six_groups,allSubjs,group_names=c("HL","HM","HH", "LL", "LM", "LH"))
+split_probe_six_groups <- split_TC_into_groups(probe_TCs,six_groups,allSubjs,group_names=c("HL","HM","HH", "LL", "LM", "LH"))
+
+```
+
+```{r prep TCs for plotting}
+
+cue_TC_for_plot <- create_TC_for_plot(split_cue_six_groups)
+delay_TC_for_plot <- create_TC_for_plot(split_delay_six_groups)
+probe_TC_for_plot <- create_TC_for_plot(split_probe_six_groups)
+
+```
+
+## L1 vs L3 activity 
+
+Here, we're plotting our data split into 6 groups - based on both WM capacity and a median split DFR performance. 
+
+Groups are labeled by this split - the first letter (H/L) is the DFR split and the second letter (H/M/L) is the WM split. 
+
+### Cue 
+
+```{r plot L1 vs L3 -- cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["wide"]]) + 
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col), alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L3,color=level),size=1)+
+          geom_line(aes(x=Time,y=L1,color=level),size=1,linetype="dashed")+
+          ylab("Mean Activity") + 
+          ggtitle(paste0("L3 vs L1 - ",names(cue_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6)))
+}
+
+
+
+```
+
+### Delay
+
+```{r plot L1 vs L3 -- delay}
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["wide"]]) + 
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col), alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L3,color=level),size=1)+
+          geom_line(aes(x=Time,y=L1,color=level),size=1,linetype="dashed")+
+          ylab("Mean Activity") + 
+          ggtitle(paste0("L3 vs L1 - ",names(delay_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6)))
+}
+
+
+
+```
+
+### Probe 
+
+```{r plot L1 vs L3 - probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["wide"]]) + 
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col), alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=L3,color=level),size=1)+
+          geom_line(aes(x=Time,y=L1,color=level),size=1,linetype="dashed")+
+          ylab("Mean Activity") + 
+          ggtitle(paste0("L3 vs L1 - ",names(probe_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6)))
+}
+
+```
+
+## Load Effects 
+
+### Cue 
+
+```{r plot LE - cue}
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  print(ggplot(data=cue_TC_for_plot[[ROI]][["wide"]]) +
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=LE,color=level),size=1)+
+          geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE"),aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=.2,linetype=2)+
+          ylab("Mean Activity") +
+          ggtitle(paste0("LE - ",names(cue_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6))
+  )
+}
+
+```
+
+### Delay 
+
+```{r plot LE - delay}
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  print(ggplot(data=delay_TC_for_plot[[ROI]][["wide"]]) +
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=LE,color=level),size=1)+
+          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE"),aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=.2,linetype=2)+
+          ylab("Mean Activity") +
+          ggtitle(paste0("LE - ",names(delay_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6))
+  )
+}
+
+```
+
+### Probe
+
+```{r plot LE - probe}
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  print(ggplot(data=probe_TC_for_plot[[ROI]][["wide"]]) +
+          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+          geom_line(aes(x=Time,y=LE,color=level),size=1)+
+          geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE"),aes(x=Time,ymin=SE_min,ymax=SE_max,fill=level),alpha=.2,linetype=2)+
+          ylab("Mean Activity") +
+          ggtitle(paste0("LE - ",names(probe_TC_for_plot)[ROI]))+
+          ylim(c(-.4,.6))
+  )
+}
+
+```
+
+## Split on DFR 
+
+To be able to compare across groups better, let's split high performing and low performing groups onto different graphs. 
+
+### Cue 
+
+```{r plot split on DFR - cue}
+
+low_col = c("turquoise","blue","violet")
+high_col = c("red","gold","green")
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  low <- ggplot(data=cue_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "LM" | level == "LH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    ylab("Mean Activity") +
+    ggtitle("Low Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  high <- ggplot(data=cue_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "HL" | level == "HM" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="red",alpha=.2,linetype=2)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="gold",alpha=.2,linetype=2)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="green",alpha=.2,linetype=2)+
+    ylab("Mean Activity") +
+    ggtitle("High Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + high) +
+          plot_annotation(title= names(cue_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect"))
+  
+} 
+
+```
+
+### Delay 
+
+```{r plot split on DFR - delay}
+
+low_col = c("turquoise","blue","violet")
+high_col = c("red","gold","green")
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  low <- ggplot(data=delay_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "LM" | level == "LH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    ylab("Mean Activity") +
+    ggtitle("Low Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  high <- ggplot(data=delay_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "HL" | level == "HM" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="red",alpha=.2,linetype=2)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="gold",alpha=.2,linetype=2)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="green",alpha=.2,linetype=2)+
+    ylab("Mean Activity") +
+    ggtitle("High Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + high) +
+          plot_annotation(title= names(delay_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect"))
+  
+} 
+
+```
+
+### Probe 
+
+```{r plot split on DFR - probe}
+
+low_col = c("turquoise","blue","violet")
+high_col = c("red","gold","green")
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  low <- ggplot(data=probe_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "LM" | level == "LH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    ylab("Mean Activity") +
+    ggtitle("Low Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  high <- ggplot(data=probe_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "HL" | level == "HM" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="red",alpha=.2,linetype=2)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="gold",alpha=.2,linetype=2)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),fill="green",alpha=.2,linetype=2)+
+    ylab("Mean Activity") +
+    ggtitle("High Performing Subjects")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + high) +
+          plot_annotation(title= names(probe_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect"))
+  
+} 
+
+```
+
+## Split on WM 
+
+Same idea, but split on WMC.
+
+### Cue 
+
+```{r plot split on WM - cue}
+
+low_col <- c("red","turquoise")
+med_col <- c("gold","blue")
+high_col <- c("green","violet")
+
+for (ROI in seq.int(1,length(cue_TC_for_plot))){
+  low <- ggplot(data=cue_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "HL")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+    ylab("Mean Activity") +
+    ggtitle("Low WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  med <- ggplot(data=cue_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LM" | level == "HM")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="gold")+
+    ylab("Mean Activity") +
+    ggtitle("Med WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=med_col)
+  
+  high <- ggplot(data=cue_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LH" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    geom_ribbon(data=cue_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+    ylab("Mean Activity") +
+    ggtitle("High WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + med + high) +
+          plot_annotation(title= names(cue_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect")
+  )
+  
+} 
+
+```
+
+### Delay 
+
+```{r plot split on WM - delay}
+
+low_col <- c("red","turquoise")
+med_col <- c("gold","blue")
+high_col <- c("green","violet")
+
+for (ROI in seq.int(1,length(delay_TC_for_plot))){
+  low <- ggplot(data=delay_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "HL")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+    ylab("Mean Activity") +
+    ggtitle("Low WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  med <- ggplot(data=delay_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LM" | level == "HM")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="gold")+
+    ylab("Mean Activity") +
+    ggtitle("Med WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=med_col)
+  
+  high <- ggplot(data=delay_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LH" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+    ylab("Mean Activity") +
+    ggtitle("High WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + med + high) +
+          plot_annotation(title= names(delay_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect"))
+  
+} 
+
+```
+
+### Probe 
+
+```{r plot split on WM - probe}
+
+low_col <- c("red","turquoise")
+med_col <- c("gold","blue")
+high_col <- c("green","violet")
+
+for (ROI in seq.int(1,length(probe_TC_for_plot))){
+  low <- ggplot(data=probe_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LL" | level == "HL")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="turquoise")+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HL"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+    ylab("Mean Activity") +
+    ggtitle("Low WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=low_col)
+  
+  med <- ggplot(data=probe_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LM" | level == "HM")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HM"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="gold")+
+    ylab("Mean Activity") +
+    ggtitle("Med WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=med_col)
+  
+  high <- ggplot(data=probe_TC_for_plot[[ROI]][["wide"]] %>% filter(level == "LH" | level == "HH")) +
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf), fill="grey", alpha =0.4,show.legend = FALSE)+
+    geom_line(aes(x=Time,y=LE,color=level),size=1)+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "LH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="violet")+
+    geom_ribbon(data=probe_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE") %>% filter(level == "HH"),aes(x=Time,ymin=SE_min,ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+    ylab("Mean Activity") +
+    ggtitle("High WMC")+
+    ylim(c(-.2,.4))+
+    scale_colour_manual(values=high_col)
+  
+  print((low + med + high) +
+          plot_annotation(title= names(probe_TC_for_plot)[[ROI]])+
+          plot_layout(guides = "collect"))
+  
+} 
+
+```

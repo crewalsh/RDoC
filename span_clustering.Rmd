@@ -1,0 +1,122 @@
+---
+title: "K means clustering"
+author: "Catherine Walsh"
+date: "5/11/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import packages, data etc}
+
+library(reshape2)
+library(tidyverse)
+library(patchwork)
+library(factoextra)
+library(knitr)
+library(kableExtra)
+
+load('data/behav.RData')
+load('data/split_groups_info.RData')
+load('data/load_effects_DFR.RData')
+
+source("helper_fxns/split_into_groups.R")
+
+se <- function(x) {
+  sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
+}
+
+```
+
+```{r create data}
+
+data_to_cluster_on <- data.frame(PTID = constructs_fMRI$PTID, 
+                                 span = constructs_fMRI$omnibus_span_no_DFR_MRI,
+                                 delay = p200_indiv_ROI_DFR_delay$DFR_ROIs)
+data_to_cluster_on <- merge(data_to_cluster_on,WM_groups[["all"]][,c(1,12)], by = "PTID")
+
+```
+
+```{r elbow plot}
+
+fviz_nbclust(data_to_cluster_on[,c(2:3)],FUNcluster = kmeans, method = "wss")
+
+```
+
+```{r do k-means}
+km.res_3_groups <- kmeans(data_to_cluster_on[,c(2:3)],3,nstart=50)
+print(km.res_3_groups)
+
+km.res_4_groups <- kmeans(data_to_cluster_on[,c(2:3)],4,nstart=50)
+print(km.res_4_groups)
+  
+```
+
+```{r}
+data_to_cluster_on$level <- as.factor(data_to_cluster_on$level)
+data_to_cluster_on$new_3_clust <- as.factor(km.res_3_groups$cluster)
+data_to_cluster_on$new_4_clust <- as.factor(km.res_4_groups$cluster)
+
+
+old_clust <- ggplot(data = data_to_cluster_on, aes(x=span,y=delay))+
+  geom_point(aes(color=level))+
+  stat_smooth(method="loess")+
+  ggtitle("Span")+  
+  theme_classic()+
+  theme(legend.position = "none")
+
+new_3_clust <- ggplot(data = data_to_cluster_on, aes(x=span,y=delay))+
+  geom_point(aes(color=new_3_clust))+
+  stat_smooth(method="loess")+
+  ggtitle("K-means - 3 groups")+
+  theme_classic()
+
+new_4_clust <- ggplot(data = data_to_cluster_on, aes(x=span,y=delay))+
+  geom_point(aes(color=new_4_clust))+
+  stat_smooth(method="loess")+
+  ggtitle("K-means - 4 groups")+
+  theme_classic()
+
+old_clust+new_3_clust+new_4_clust+
+  plot_annotation(title="Clustering based on different algorithms")+
+  plot_layout(guides="collect")
+
+
+
+```
+
+```{r look at aggregate scores}
+
+measures_to_examine <- merge(constructs_fMRI[,c(1,7)],p200_data[,c(1,7,26,34)])
+measures_to_examine <- measures_to_examine[measures_to_examine$PTID %in% WM_groups[["all"]]$PTID,]
+
+aggregate(measures_to_examine[2:5], by=list(cluster=km.res_4_groups$cluster), mean) %>% 
+  kable(format = "html", escape = F, caption = "Aggregates from K means clustering with 4 groups") %>%
+  kable_styling("striped", full_width = F) 
+
+aggregate(measures_to_examine[2:5], by=list(cluster=km.res_3_groups$cluster), mean) %>% 
+  kable(format = "html", escape = F, caption = "Aggregates from K means clustering with 3 groups") %>%
+  kable_styling("striped", full_width = F) 
+
+aggregate(measures_to_examine[2:5], by=list(cluster=data_to_cluster_on$level), mean) %>% 
+  kable(format = "html", escape = F, caption = "Aggregates from groups split on span") %>%
+  kable_styling("striped", full_width = F) 
+
+
+
+
+```
+
+```{r test BPRS diffs}
+
+BPRS_4_clust <- aov(measures_to_examine$BPRS_TOT ~ data_to_cluster_on$new_4_clust)
+summary(BPRS_4_clust)
+TukeyHSD(BPRS_4_clust)
+
+```
+

@@ -1,0 +1,1539 @@
+---
+title: "DFR Split Means"
+author: "Catherine Walsh"
+date: "4/1/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We also wanted to investigate what happens when we run a similar analysis, but we split groups based on DFR accuracy. 
+
+```{r load libraries, data and custom functions}
+
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(psych)
+library(patchwork)
+library(rockchalk)
+
+load('data/load_effects_DFR.RData')
+load('data/behav.RData')
+load('data/structural_measures.RData')
+load('data/connectivity_data.RData')
+
+source("helper_fxns/split_into_groups.R")
+source("helper_fxns/prep_split_for_bar_plots.R")
+source("helper_fxns/plot_bars.R")
+
+```
+
+```{r scatter plots L3 accuracy to load effects}
+
+acc <- p200_data[p200_data$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]
+acc <- merge(acc,construct_vars_omnibus)
+
+data_for_plot <- merge(p200_indiv_ROI_DFR_delay,acc)
+
+p1 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_ROIs))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.85,y=2.25,label="r = 0.25**")
+
+p2 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r = 0.26***")
+
+p3 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.85,y=.9,label="r = 0.24**")
+
+
+
+p4 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_L_preSMA))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r = 0.28***")
+
+
+(p1+p2)/(p3+p4)
+
+
+```
+
+```{r split into groups based on accuracy}
+
+#sort by omnibus span
+p200_data_sorted <- acc[order(acc$XDFR_MRI_ACC_L3),]
+
+low_DFR <- p200_data_sorted[1:56,]
+med_DFR <- p200_data_sorted[58:113,]
+high_DFR <-p200_data_sorted[115:170,]
+low_DFR$level <- "low"
+med_DFR$level <- "med"
+high_DFR$level <- "high"
+
+things_to_hist <- rbind(low_DFR,med_DFR,high_DFR)
+
+DFR_groups <- list(high=data.frame(high_DFR),med=data.frame(med_DFR), low=data.frame(low_DFR), all=data.frame(things_to_hist))
+
+
+```
+
+```{r create median split}
+
+low_med_split_DFR <- p200_data_sorted[1:85,]
+high_med_split_DFR <- p200_data_sorted[86:170,]
+
+low_med_split_DFR$level <- "low_median"
+high_med_split_DFR$level <- "high_median"
+
+things_to_hist <- rbind(low_med_split_DFR,high_med_split_DFR)
+
+DFR_median_split_groups <- list(high = data.frame(high_med_split_DFR),low=data.frame(low_med_split_DFR),all=data.frame(things_to_hist))
+
+save(list=c("DFR_groups", "DFR_median_split_groups", "p200_data_sorted"),file="data/DFR_split_groups_info.RData")
+
+
+```
+
+# Compare how group IDs change 
+
+```{r compare new and old groups}
+
+load("~/Documents/Code/RDoC_for_GitHub/data/split_WM_groups_fMRI.RData")
+DFR_med_split <- rbind(low_med_split_DFR,high_med_split_DFR)
+
+DFR_split_data <- dplyr::select(DFR_groups[["all"]],"PTID","XDFR_MRI_ACC_L3","level") 
+WM_split_data <- dplyr::select(split_constructs[["all"]],"PTID","omnibus_span_no_DFR_MRI","level")
+DFR_med_split_data <- dplyr::select(DFR_med_split,"PTID","level")
+colnames(DFR_split_data)[3] <- "DFR_level"
+colnames(WM_split_data)[3] <- "WM_level"
+colnames(DFR_med_split_data)[2] <- "DFR_med_level"
+
+comparison <- merge(DFR_split_data,WM_split_data,by="PTID")
+comparison <- merge(comparison, DFR_med_split_data,by="PTID")
+
+comparison <- dplyr::select(comparison,"PTID", "omnibus_span_no_DFR_MRI","XDFR_MRI_ACC_L3", "WM_level","DFR_level","DFR_med_level")
+
+comparison_counts <- data.frame(matrix(nrow=3,ncol=3))
+colnames(comparison_counts) <- c("low_WM","med_WM","high_WM")
+rownames(comparison_counts) <- c("low_DFR","med_DFR","high_DFR")
+
+for (row in seq.int(1,3)){
+  for (col in seq.int(1,3)){
+    comparison_counts[row,col] <- sum(substr(comparison$WM_level,1,3)==substr(colnames(comparison_counts)[row],1,3) & substr(comparison$DFR_level,1,3)==substr(colnames(comparison_counts)[col],1,3))
+    
+  }
+}
+
+comparison_counts_melt <- data.frame(matrix(ncol=3,nrow=9))
+colnames(comparison_counts_melt) <- c("WM","DFR","count")
+row_count <- 1
+for (row in seq.int(1,3)){
+  for (col in seq.int(1,3)){ 
+    comparison_counts_melt$WM[row_count] <- colnames(comparison_counts)[row]
+    comparison_counts_melt$DFR[row_count] <- rownames(comparison_counts)[col]
+    comparison_counts_melt$count[row_count] <- comparison_counts[row,col]
+    row_count = row_count+1
+  }
+}
+
+comparison_counts_melt$WM <- factor(comparison_counts_melt$WM,levels = c("low_WM","med_WM","high_WM"))
+comparison_counts_melt$DFR <- factor(comparison_counts_melt$DFR,levels=c("low_DFR","med_DFR","high_DFR"))
+
+
+```
+
+Subjects split on DFR high load accuracy. 56 subjects per group. Approximately 50% of subjects stay in their initial group.
+
+```{r plot changes}
+
+ggplot(data=comparison_counts_melt)+
+  geom_tile(aes(x=WM,y=DFR, fill=count))+
+  geom_text(aes(x=WM,y=DFR,label=count),size=8,color="white")+ 
+  theme(legend.position = "none") 
+
+```
+
+```{r split on median}
+
+comparison_counts_median <- data.frame(matrix(nrow=2,ncol=3))
+colnames(comparison_counts_median) <- c("low_WM","med_WM","high_WM")
+rownames(comparison_counts_median) <- c("low_DFR_median","high_DFR_median")
+
+comparison_counts_median[1,1] <- sum(comparison$WM_level == "low" & comparison$DFR_med_level == "low_median")
+comparison_counts_median[2,1] <- sum(comparison$WM_level == "low" & comparison$DFR_med_level == "high_median")
+
+comparison_counts_median[1,2] <- sum(comparison$WM_level == "med" & comparison$DFR_med_level == "low_median")
+comparison_counts_median[2,2] <- sum(comparison$WM_level == "med" & comparison$DFR_med_level == "high_median")
+
+comparison_counts_median[1,3] <- sum(comparison$WM_level == "high" & comparison$DFR_med_level == "low_median")
+comparison_counts_median[2,3] <- sum(comparison$WM_level == "high" & comparison$DFR_med_level == "high_median")
+
+
+comparison_counts_median_melt <- data.frame(matrix(ncol=3,nrow=6))
+colnames(comparison_counts_median_melt) <- c("WM","DFR_median","count")
+row_count <- 1
+for (row in seq.int(1,2)){
+  for (col in seq.int(1,3)){ 
+    comparison_counts_median_melt$WM[row_count] <- colnames(comparison_counts_median)[col]
+    comparison_counts_median_melt$DFR_median[row_count] <- rownames(comparison_counts_median)[row]
+    comparison_counts_median_melt$count[row_count] <- comparison_counts_median[row,col]
+    row_count = row_count+1
+  }
+}
+
+comparison_counts_median_melt$WM <- factor(comparison_counts_median_melt$WM,levels = c("low_WM","med_WM","high_WM"))
+comparison_counts_median_melt$DFR <- factor(comparison_counts_median_melt$DFR_median,levels=c("low_DFR_median","high_DFR_median"))
+
+```
+
+Later, we're going to make our lives easier by just looking at DFR split on median (high scorers and low scorers), so let's look at this as well. 
+
+We tend to see that if you have at least medium capacity, you tend to do well on the task. 
+
+```{r plot split on median}
+
+ggplot(data=comparison_counts_median_melt)+
+  geom_tile(aes(x=WM,y=DFR_median, fill=count))+
+  geom_text(aes(x=WM,y=DFR_median,label=count),size=8,color="white")
+
+
+```
+
+
+```{r split load effects data into groups}
+
+split_constructs <- split_into_groups(constructs_fMRI[1:7],DFR_groups)
+split_clinical <- split_into_groups(p200_clinical_zscores, DFR_groups)
+split_DFR_delay <- split_into_groups(p200_indiv_ROI_DFR_delay, DFR_groups)
+split_DFR_cue <- split_into_groups(p200_indiv_ROI_DFR_cue, DFR_groups)
+split_DFR_probe <- split_into_groups(p200_indiv_ROI_DFR_probe, DFR_groups)
+split_DFR_FFA <- split_into_groups(p200_FFA,DFR_groups)
+split_DFR_HPC_Ant <- split_into_groups(p200_HPC_Ant, DFR_groups)
+split_DFR_HPC_Med <- split_into_groups(p200_HPC_Med, DFR_groups)
+split_DFR_HPC_Post <- split_into_groups(p200_HPC_Post, DFR_groups)
+split_fullMask_delay <- split_into_groups(p200_DFR_full_mask, DFR_groups)
+split_cue_ROIs <- split_into_groups(p200_indiv_ROI_delayDFR_cuePeriod, DFR_groups)
+split_demographics <- split_into_groups(p200_demographics,DFR_groups)
+split_cortical_thickness_DFR <- split_into_groups(p200_DFR_fullMask_cortical_thickness,DFR_groups)
+split_RS <- split_into_groups(p200_all_RS,DFR_groups)
+split_beta_conn_cue <- split_into_groups(p200_beta_conn_cue,DFR_groups)
+split_beta_conn_delay <- split_into_groups(p200_beta_conn_delay,DFR_groups)
+split_BCT <- split_into_groups(p200_BCT_forCorr,DFR_groups)
+split_indiv_partic_coeff <- split_into_groups(p200_indiv_network_ParticCoeff,DFR_groups)
+
+```
+
+```{r save split group data, eval=FALSE}
+
+save(list=c("split_constructs","split_clinical","split_DFR_delay", "split_DFR_cue", "split_DFR_probe", "split_DFR_FFA", "split_DFR_HPC_Ant", "split_DFR_HPC_Med", "split_DFR_HPC_Post", "split_fullMask_delay", "split_cue_ROIs", "split_demographics","split_cortical_thickness_DFR","split_RS","split_beta_conn_cue","split_beta_conn_delay","split_BCT", "split_indiv_partic_coeff"), file="data/split_DFR_groups_fMRI.RData")
+
+```
+
+```{r prep demo data for plots}
+
+split_means_demo <- data.frame(matrix(nrow=length(split_demographics)-1,ncol=8))
+colnames(split_means_demo) <- c("Trio","Prisma","CS","NCS","female","male","age","age_se")
+rownames(split_means_demo) <- names(split_demographics)[1:length(names(split_demographics))-1]
+
+for (level in seq.int(1,length(split_demographics)-1)){
+  split_means_demo$Trio[level] <- length(split_demographics[[level]]$SCANNER[split_demographics[[level]]$SCANNER==1])
+  split_means_demo$Prisma[level] <- length(split_demographics[[level]]$SCANNER[split_demographics[[level]]$SCANNER==2])
+  split_means_demo$CS[level] <- length(split_demographics[[level]]$GROUP[split_demographics[[level]]$GROUP==1])
+  split_means_demo$NCS[level] <- length(split_demographics[[level]]$GROUP[split_demographics[[level]]$GROUP==2])
+  split_means_demo$female[level] <- length(split_demographics[[level]]$GENDER[split_demographics[[level]]$GENDER==2])
+  split_means_demo$male[level] <- length(split_demographics[[level]]$GENDER[split_demographics[[level]]$GENDER==1])
+  split_means_demo$age[level] <- mean(split_demographics[[level]]$AGE,na.rm=TRUE)
+  split_means_demo$age_se[level] <- sd(split_demographics[[level]]$AGE,na.rm=TRUE)/sqrt(length(split_demographics[[level]]$AGE[!is.na(split_demographics[[level]]$AGE)]))
+  
+}
+
+split_means_demo$level <- as.factor(c("high", "med","low"))
+means_melt_demo <- melt(split_means_demo,id.vars="level")
+
+
+```
+
+```{r create data for demo bar plots, echo=FALSE,warning=FALSE,message=FALSE}
+
+demo_plot_data <- data.frame(level=factor(c("high","med","low","high","med","low"),levels=c("high","med","low")),gender_count=append(split_means_demo$male,split_means_demo$female), scanner_count=append(split_means_demo$Trio,split_means_demo$Prisma),scanner=as.factor(c("Trio","Trio","Trio","Prisma","Prisma","Prisma")),gender=as.factor(c("Male","Male","Male","Female","Female","Female")),care=as.factor(c("CS","CS","CS","NCS","NCS","NCS")),care_count=append(split_means_demo$CS,split_means_demo$NCS))
+
+demo_plot_data.m <- melt(demo_plot_data)
+
+```
+
+# Demographics
+
+Most notable thing here is that there is a larger proportion of CS than NCS in the low performing group. Also seeing that there are more females in the mid performing group.
+
+```{r plot demographics}
+
+age_plot <- ggplot(data=split_means_demo,aes(x=level,y=age))+
+  geom_bar(stat="identity",width = .5, color = "#667Ea4", fill = "#667Ea4")+
+  geom_errorbar(aes(ymin=age-age_se,ymax=age+age_se),width=.2)+
+  ggtitle("Age") +
+  ylab("Mean +/- SE") +
+  scale_x_discrete(limits = c("low","med","high")) +
+  theme(aspect.ratio = 1)
+
+scanner_data <- demo_plot_data.m[demo_plot_data.m$variable=="scanner_count",c(1,2,5,6)]
+scanner_data$value <- scanner_data$value/56*100
+scanner_plot <- ggplot(scanner_data,aes(x=level,y=value,fill=scanner))+
+  geom_bar(stat="identity") +
+  ylab("Percent (%)") +
+  theme(aspect.ratio=1) +
+  scale_x_discrete(limits = c("low","med","high")) +
+  ggtitle("Scanner")
+
+gender_data <- demo_plot_data.m[demo_plot_data.m$variable=="gender_count",c(1,3,5,6)]
+gender_data$value <- gender_data$value/56*100
+gender_plot <- ggplot(gender_data,aes(x=level,y=value, fill=gender))+
+  geom_bar(stat="identity") +
+  ylab("Percent (%)") +
+  theme(aspect.ratio=1) +
+  scale_x_discrete(limits = c("low","med","high")) +
+  ggtitle("Gender")
+
+
+care_data <- demo_plot_data.m[demo_plot_data.m$variable=="care_count",c(1,4:6)]
+care_data$value <- care_data$value/56*100
+care_plot <- ggplot(care_data,aes(x=level,y=value, fill=care))+
+  geom_bar(stat="identity") +
+  ylab("Percent (%)") +
+  theme(aspect.ratio=1) +
+  scale_x_discrete(limits = c("low","med","high")) +
+  ggtitle("CS vs NCS")
+
+(age_plot + gender_plot)/(care_plot + scanner_plot)+
+  plot_annotation(title="Demographics split by DFR performance")
+
+
+```
+
+
+```{r prep fMRI split data for bar plots}
+
+melt_constructs <- prep_split_for_bar_plots(DFR_groups)
+melt_clinical <- prep_split_for_bar_plots(split_clinical)
+melt_DFR_delay <- prep_split_for_bar_plots(split_DFR_delay)
+melt_DFR_cue <- prep_split_for_bar_plots(split_DFR_cue)
+melt_DFR_probe <- prep_split_for_bar_plots(split_DFR_probe)
+melt_DFR_FFA <- prep_split_for_bar_plots(split_DFR_FFA)
+melt_DFR_HPC_Ant <- prep_split_for_bar_plots(split_DFR_HPC_Ant)
+melt_DFR_HPC_Med <- prep_split_for_bar_plots(split_DFR_HPC_Med)
+melt_DFR_HPC_Post <- prep_split_for_bar_plots(split_DFR_HPC_Post)
+melt_fullMask_delay <- prep_split_for_bar_plots(split_fullMask_delay)
+melt_cue_ROIs <- prep_split_for_bar_plots(split_cue_ROIs)
+melt_cortical_thickness_DFR <- prep_split_for_bar_plots(split_cortical_thickness_DFR)
+melt_RS <- prep_split_for_bar_plots(split_RS)
+melt_beta_conn_cue <- prep_split_for_bar_plots(split_beta_conn_cue)
+melt_beta_conn_delay <- prep_split_for_bar_plots(split_beta_conn_delay)
+melt_BCT <- prep_split_for_bar_plots(split_BCT)
+melt_indiv_partic_coeff <- prep_split_for_bar_plots(split_indiv_partic_coeff)
+
+```
+
+```{r make ggplots}
+
+constructs_plots <- plot_bars(melt_constructs)
+clinical_plots <- plot_bars(melt_clinical)
+DFR_delay_plots <- plot_bars(melt_DFR_delay)
+DFR_cue_plots <- plot_bars(melt_DFR_cue)
+DFR_probe_plots <- plot_bars(melt_DFR_probe)
+DFR_FFA_plots <- plot_bars(melt_DFR_FFA)
+DFR_HPC_Ant_plots <- plot_bars(melt_DFR_HPC_Ant)
+DFR_HPC_Med_plots <- plot_bars(melt_DFR_HPC_Med)
+DFR_HPC_Post_plots <- plot_bars(melt_DFR_HPC_Post)
+fullMask_delay_plots <- plot_bars(melt_fullMask_delay)
+cue_ROIs_plots <- plot_bars(melt_cue_ROIs)
+cortical_thickness_plots <- plot_bars(melt_cortical_thickness_DFR)
+RS_plots <- plot_bars(melt_RS)
+beta_conn_cue_plots <- plot_bars(melt_beta_conn_cue)
+beta_conn_delay_plots <- plot_bars(melt_beta_conn_delay)
+BCT_plots <- plot_bars(melt_BCT)
+indiv_partic_coeff_plots <- plot_bars(melt_indiv_partic_coeff)
+
+```
+
+# Constructs
+
+A nice sanity check here as well - if a subject has higher capacity and higher intelligence, they tend to have higher performance. The main statistically significant differences here are in omnibus span, where high > low. 
+
+```{r plot constructs figures}
+
+constructs_plots[["omnibus_span_no_DFR_MRI"]]$labels$title = "Omnibus Span"
+
+(constructs_plots[["omnibus_span_no_DFR_MRI"]]+constructs_plots[["intelligence"]]+constructs_plots[["LTM"]]) +
+  plot_annotation(title="Constructs split on DFR performance")
+
+```
+
+```{r one way ANOVAs for constructs}
+
+print("Omnibus Span")
+span.aov <- aov(omnibus_span_no_DFR_MRI ~ level, data=split_constructs[["all"]])
+summary(span.aov)
+TukeyHSD(span.aov)
+
+print("LTM")
+LTM.aov <- aov(LTM ~ level, data=split_constructs[["all"]])
+summary(LTM.aov)
+TukeyHSD(LTM.aov)
+
+print("Intelligence")
+intelligence.aov <- aov(intelligence ~ level, data=split_constructs[["all"]])
+summary(intelligence.aov)
+TukeyHSD(intelligence.aov)
+
+
+```
+
+# Clinical
+
+There is a significant negative correlation between BPRS and performance - this doesn't come through quite as well in the split groups, but we definitely still see the pattern and there is a trend in differences in the ANOVA. 
+
+```{r scatter plots acc vs clinical}
+
+ggplot(data=data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = WHO_ST_S32))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=55,label="r=-0.13")+
+  ggtitle("Correlation of WHODAS and DFR Performance")
+
+print("WHODAS")
+print(cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$WHO_ST_S32))
+
+ggplot(data=data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = BPRS_TOT))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=.9,y=70,label="r=-0.19*")+
+  ggtitle("Correlation of BPRS and DFR Performance")
+
+print("BPRS")
+print(cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$BPRS_TOT))
+
+
+
+```
+
+
+```{r plot clinical}
+
+clinical_plots[["WHO_ST_S32"]]$labels$title <- "WHODAS"
+clinical_plots[["BPRS"]]$labels$title <- "BPRS"
+
+(clinical_plots[["WHO_ST_S32"]] + clinical_plots[["BPRS_TOT"]])+
+  plot_annotation(title="Clinical measures split by DFR performance")
+
+```
+
+```{r clinical sig testing}
+
+print("WHODAS")
+WHODAS.aov <- aov(WHO_ST_S32 ~ level, data=split_clinical[["all"]])
+summary(WHODAS.aov)
+
+print("BPRS")
+BPRS.aov <- aov(BPRS_TOT ~ level, data=split_clinical[["all"]])
+summary(BPRS.aov)
+
+```
+
+# Cue Period 
+
+## Full mask
+
+There is a linear relationship between performance and load effect in the cue mask during the delay period. 
+
+```{r full mask cue}
+
+fullMask_delay_plots[["cue_low"]]+fullMask_delay_plots[["cue_high"]]+fullMask_delay_plots[["cue_loadEffect"]]+
+  plot_annotation(title="BOLD signal from full delay period mask during cue period")
+
+```
+
+```{r cue full mask sig testing}
+
+print("Load Effect")
+cue_LE.aov <- aov(cue_loadEffect ~ level, data=split_fullMask_delay[["all"]])
+summary(cue_LE.aov)
+TukeyHSD(cue_LE.aov)
+
+```
+
+### Scatter Plots 
+
+Let's look at some scatter plots for the more linear looking things - particularly the high load and the load effect. 
+
+```{r scatter plots cue full mask}
+
+data_for_plot <- merge(p200_data,p200_DFR_full_mask,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=cue_high))+
+  geom_point()+
+  stat_smooth(method="lm")+  
+  geom_text(x=0.9,y=2,label="r=0.25**")+
+  ggtitle("High Load")
+
+print("High Load")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$cue_high)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=cue_loadEffect))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.5,label="r=0.24**")+
+  
+  ggtitle("Load Effect")
+
+print("Load Effect")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$cue_loadEffect)
+
+```
+
+## Individual ROIs
+
+The only significant thing here is the occipital regions - more decrease in 
+
+```{r plot cue period ROIs}
+
+DFR_cue_plots[["L_FEF_low"]] +  DFR_cue_plots[["L_FEF_high"]] + DFR_cue_plots[["L_FEF_loadEffect"]]
+
+DFR_cue_plots[["L_insula_low"]] +  DFR_cue_plots[["L_insula_high"]] + DFR_cue_plots[["L_insula_loadEffect"]]
+
+DFR_cue_plots[["L_IPS_low"]] +  DFR_cue_plots[["L_IPS_high"]] + DFR_cue_plots[["L_IPS_loadEffect"]]
+
+DFR_cue_plots[["L_occipital_low"]] +  DFR_cue_plots[["L_occipital_high"]] + DFR_cue_plots[["L_occipital_loadEffect"]]
+
+DFR_cue_plots[["R_FEF_low"]] +  DFR_cue_plots[["R_FEF_high"]] + DFR_cue_plots[["R_FEF_loadEffect"]]
+
+DFR_cue_plots[["R_insula_low"]] +  DFR_cue_plots[["R_insula_high"]] + DFR_cue_plots[["R_insula_loadEffect"]]
+
+DFR_cue_plots[["R_IPS_low"]] +  DFR_cue_plots[["R_IPS_high"]] + DFR_cue_plots[["R_IPS_loadEffect"]]
+
+DFR_cue_plots[["R_MFG_low"]] +  DFR_cue_plots[["R_MFG_high"]] + DFR_cue_plots[["R_MFG_loadEffect"]]
+
+DFR_cue_plots[["R_preSMA_low"]] +  DFR_cue_plots[["R_preSMA_high"]] + DFR_cue_plots[["R_preSMA_loadEffect"]]
+
+DFR_cue_plots[["R_occipital_low"]] +  DFR_cue_plots[["R_occipital_high"]] + DFR_cue_plots[["R_occipital_loadEffect"]]
+
+
+```
+
+
+```{r cue ROIs ANOVA}
+
+print("L FEF")
+cue_L_FEF.aov <- aov(L_FEF_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_L_FEF.aov)
+
+print("L insula")
+cue_L_insula.aov <- aov(L_insula_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_L_insula.aov)
+
+print("L IPS")
+cue_L_IPS.aov <- aov(L_IPS_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_L_IPS.aov)
+
+print("L occipital")
+cue_L_occipital.aov <- aov(L_occipital_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_L_occipital.aov)
+
+print("R FEF")
+cue_R_FEF.aov <- aov(R_FEF_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_FEF.aov)
+
+print("R insula")
+cue_R_insula.aov <- aov(R_insula_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_insula.aov)
+
+print("R IPS")
+cue_R_IPS.aov <- aov(R_IPS_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_IPS.aov)
+
+print("R MFG")
+cue_R_MFG.aov <- aov(R_MFG_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_MFG.aov)
+
+print("R occipital")
+cue_R_occipital.aov <- aov(R_occipital_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_occipital.aov)
+
+print("R preSMA")
+cue_R_preSMA.aov <- aov(R_preSMA_loadEffect ~ level, data=split_DFR_cue[["all"]])
+summary(cue_R_preSMA.aov)
+
+```
+
+# Delay Period
+
+## Full Mask
+
+There are significant differnces in the high load and load effect - the high load trials have differences: high > low and high > medium, while the load effect only has high > low. 
+
+```{r plot full mask delay}
+
+fullMask_delay_plots[["delay_low"]]+fullMask_delay_plots[["delay_high"]]+fullMask_delay_plots[["delay_loadEffect"]]+
+  plot_annotation(title="BOLD signal from full delay period mask during delay period")
+
+```
+
+```{r delay full mask sig testing}
+
+print("Low Load")
+delay_L1.aov <- aov(delay_low ~ level, data=split_fullMask_delay[["all"]])
+summary(delay_L1.aov)
+TukeyHSD(delay_L1.aov)
+
+print("High Load")
+delay_L3.aov <- aov(delay_high ~ level, data=split_fullMask_delay[["all"]])
+summary(delay_L3.aov)
+TukeyHSD(delay_L3.aov)
+
+print("Load Effect")
+delay_LE.aov <- aov(delay_loadEffect ~ level, data=split_fullMask_delay[["all"]])
+summary(delay_LE.aov)
+TukeyHSD(delay_LE.aov)
+
+```
+
+### Scatter Plots 
+
+Let's look at some scatter plots for the more linear looking things - particularly the high load and the load effect. 
+
+```{r scatter plots delay period full mask}
+
+data_for_plot <- merge(p200_data,p200_DFR_full_mask,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=delay_high))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=0.6,label="r=0.26***")+
+  
+  ggtitle("High Load")
+
+print("High Load")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$delay_high)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=delay_loadEffect))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r=0.26***")+
+  ggtitle("Load Effect")
+
+print("Load Effect")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$delay_loadEffect)
+
+```
+
+## Individual ROIs
+
+No L dMFG, all show high > low, except for . L aMFG, L dlPFC, R dlPFC also showed high > med, and R medial parietal only showed high > med.  
+
+```{r plot delay period DFR ROIs}
+
+(DFR_delay_plots[["DFR_L_aMFG"]] + DFR_delay_plots[["DFR_L_dlPFC"]] + DFR_delay_plots[["DFR_L_dMFG"]]) + plot_annotation(title="individual DFR delay period ROIs")
+(DFR_delay_plots[["DFR_L_IPS"]] + DFR_delay_plots[["DFR_L_preSMA"]] + DFR_delay_plots[["DFR_R_dlPFC"]])  
+(DFR_delay_plots[["DFR_R_dMFG"]] + DFR_delay_plots[["DFR_R_IPS"]] + DFR_delay_plots[["DFR_R_medParietal"]]) 
+
+```
+
+```{r sig test individual ROIs}
+
+print("L aMFG")
+L_aMFG.aov <- aov(DFR_L_aMFG ~ level, data=split_DFR_delay[["all"]])
+summary(L_aMFG.aov)
+TukeyHSD(L_aMFG.aov)
+
+print("L dlPFC")
+L_dlPFC.aov <- aov(DFR_L_dlPFC ~ level, data=split_DFR_delay[["all"]])
+summary(L_dlPFC.aov)
+TukeyHSD(L_dlPFC.aov)
+
+print("L dMFG")
+L_dMFG.aov <- aov(DFR_L_dMFG ~ level, data=split_DFR_delay[["all"]])
+summary(L_dMFG.aov)
+
+print("L IPS")
+L_IPS.aov <- aov(DFR_L_IPS ~ level, data=split_DFR_delay[["all"]])
+summary(L_IPS.aov)
+TukeyHSD(L_IPS.aov)
+
+print("L preSMA")
+L_preSMA.aov <- aov(DFR_L_preSMA ~ level, data=split_DFR_delay[["all"]])
+summary(L_preSMA.aov)
+TukeyHSD(L_preSMA.aov)
+
+print("R dlPFC")
+R_dlPFC.aov <- aov(DFR_R_dlPFC ~ level, data=split_DFR_delay[["all"]])
+summary(R_dlPFC.aov)
+TukeyHSD(R_dlPFC.aov)
+
+print("R dMFG")
+R_dMFG.aov <- aov(DFR_R_dMFG ~ level, data=split_DFR_delay[["all"]])
+summary(R_dMFG.aov)
+TukeyHSD(R_dMFG.aov)
+
+print("R IPS")
+R_IPS.aov <- aov(DFR_R_IPS ~ level, data=split_DFR_delay[["all"]])
+summary(R_IPS.aov)
+TukeyHSD(R_IPS.aov)
+
+print("R medial Parietal")
+R_medParietal.aov <- aov(DFR_R_medParietal ~ level, data=split_DFR_delay[["all"]])
+summary(R_medParietal.aov)
+TukeyHSD(R_medParietal.aov)
+
+```
+
+### Scatter Plots 
+
+Let's look at some scatter plots for the more linear looking things - particularly the high load and the load effect. 
+
+```{r scatter plots indiv network participation coefficient}
+
+data_for_plot <- merge(p200_data,p200_indiv_ROI_DFR_delay,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_L_aMFG))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r=0.27***")+
+  ggtitle("L aMFG")
+
+print("L aMFG")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_aMFG)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r=0.26***")+
+  
+  ggtitle("L dlPFC")
+
+print("L dlPFC")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_dlPFC)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_L_dMFG))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=0.75,label="r=0.16*")+
+  ggtitle("L dMFG")
+
+print("L dMFG")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_dMFG)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=0.75,label="r=0.24**")+
+  ggtitle("L IPS")
+
+print("L IPS")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_IPS)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_L_preSMA))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1,label="r=0.28***")+
+  ggtitle("L preSMA")
+
+print("L preSMA")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_preSMA)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_R_dlPFC))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.25,label="r=0.23**")+
+  ggtitle("R dlPFC")
+
+print("R dlPFC")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_R_dlPFC)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_R_dMFG))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.25,label="r=0.20**")+
+  ggtitle("R dMFG")
+
+print("R dMFG")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_R_dMFG)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_R_IPS))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.25,label="r=0.25**")+
+  
+  ggtitle("R IPS")
+
+print("R IPS")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_R_IPS)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=DFR_R_medParietal))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.75,label="r=0.18*")+
+  ggtitle("R medial Parietal")
+
+print("R medial Parietal")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_R_medParietal)
+
+```
+
+# Probe Period
+
+## Full Mask
+
+No differences in the probe period. 
+
+```{r plot probe full mask}
+
+fullMask_delay_plots[["probe_low"]]+fullMask_delay_plots[["probe_high"]]+fullMask_delay_plots[["probe_loadEffect"]]+
+  plot_annotation(title="BOLD signal from full delay period mask during probe period")
+
+```
+
+```{r probe full mask sig testing}
+
+print("Low Load")
+probe_L1.aov <- aov(probe_low ~ level, data=split_fullMask_delay[["all"]])
+summary(probe_L1.aov)
+
+print("High Load")
+probe_L3.aov <- aov(probe_high ~ level, data=split_fullMask_delay[["all"]])
+summary(probe_L3.aov)
+
+print("Load Effect")
+probe_LE.aov <- aov(probe_loadEffect ~ level, data=split_fullMask_delay[["all"]])
+summary(probe_LE.aov)
+
+```
+
+```{r scatter plots probe period full mask}
+
+data_for_plot <- merge(p200_data,p200_DFR_full_mask,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=probe_loadEffect))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=2.5,label="r=0.19*")+
+  ggtitle("Load Effect")
+
+print("Load Effect")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$probe_loadEffect)
+
+```
+
+## Individual ROIs
+
+```{r plot probe period ROIs}
+
+DFR_probe_plots[["dmPFC_loadEffect"]] + DFR_probe_plots[["L_aMFG_loadEffect"]] + DFR_probe_plots[["L_dlPFC_loadEffect"]] +
+  plot_annotation(title="individual DFR activity from probe period regions")
+
+DFR_probe_plots[["L_insula_loadEffect"]] + DFR_probe_plots[["L_IPS_loadEffect"]] + DFR_probe_plots[["R_dlPFC_loadEffect"]] 
+
+DFR_probe_plots[["R_insula_loadEffect"]] + DFR_probe_plots[["R_OFC_loadEffect"]] 
+
+```
+
+```{r probe ROIs ANOVA}
+
+print("dmPFC")
+probe_dmPFC.aov <- aov(dmPFC_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_dmPFC.aov)
+
+print("L aMFG")
+probe_L_aMFG.aov <- aov(L_aMFG_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_L_aMFG.aov)
+
+print("L dlPFC")
+probe_L_dlPFC.aov <- aov(L_dlPFC_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_L_dlPFC.aov)
+
+print("L insula")
+probe_L_insula.aov <- aov(L_insula_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_L_insula.aov)
+
+print("R dlPFC")
+probe_R_dlPFC.aov <- aov(R_dlPFC_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_R_dlPFC.aov)
+
+print("R Insula")
+probe_R_insula.aov <- aov(R_insula_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_R_insula.aov)
+
+print("R OFC")
+probe_R_OFC.aov <- aov(R_OFC_loadEffect ~ level, data=split_DFR_probe[["all"]])
+summary(probe_R_OFC.aov)
+
+```
+
+# FFA
+
+Only see difference in L FFA load effect during cue, with high > low. 
+
+```{r plot DFR FFA}
+
+DFR_FFA_plots[["L_CUE_LE"]] + DFR_FFA_plots[["L_DELAY_LE"]] + DFR_FFA_plots[["L_PROBE_LE"]]+
+  plot_annotation(title="FFA during DFR task")
+
+DFR_FFA_plots[["R_CUE_LE"]] + DFR_FFA_plots[["R_DELAY_LE"]] + DFR_FFA_plots[["R_PROBE_LE"]]
+
+
+```
+
+```{r FFA ANOVA}
+
+print("L Cue")
+L_CUE_LE_FFA.aov <- aov(L_CUE_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(L_CUE_LE_FFA.aov)
+TukeyHSD(L_CUE_LE_FFA.aov)
+
+print("R Cue")
+R_CUE_LE_FFA.aov <- aov(R_CUE_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(R_CUE_LE_FFA.aov)
+
+print("L Delay")
+L_DELAY_LE_FFA.aov <- aov(L_DELAY_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(L_DELAY_LE_FFA.aov)
+
+print("R Delay")
+R_DELAY_LE_FFA.aov <- aov(R_DELAY_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(R_DELAY_LE_FFA.aov)
+
+print("L Probe")
+L_PROBE_LE_FFA.aov <- aov(L_PROBE_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(L_PROBE_LE_FFA.aov)
+
+print("R Probe")
+R_PROBE_LE_FFA.aov <- aov(R_PROBE_LE ~ level, data=split_DFR_FFA[["all"]])
+summary(R_PROBE_LE_FFA.aov)
+
+```
+
+```{r scatter plots FFA}
+
+data_for_plot <- merge(p200_data,p200_FFA,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=R_CUE_LE))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=2.25,label="r=0.26***")+
+  ggtitle("R Cue LE")
+
+print("R cue Load Effect")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$R_CUE_LE)
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=L_CUE_LE))+
+  geom_point()+
+  stat_smooth(method="lm")+  
+  geom_text(x=0.9,y=2.25,label="r=0.29***")+
+  ggtitle("L Cue LE")
+
+print("L cue Load Effect")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$L_CUE_LE)
+
+
+```
+
+# HPC
+
+No significant differences in any region of the hippocampus. 
+
+## Anterior
+
+### L3 
+
+```{r plot HPC L3 Ant}
+
+DFR_HPC_Ant_plots[["L_CUE_L3"]] + DFR_HPC_Ant_plots[["L_DELAY_L3"]] + DFR_HPC_Ant_plots[["L_PROBE_L3"]]+
+  plot_annotation(title="HPC Ant during DFR task")
+
+DFR_HPC_Ant_plots[["R_CUE_L3"]] + DFR_HPC_Ant_plots[["R_DELAY_L3"]] + DFR_HPC_Ant_plots[["R_PROBE_L3"]]
+
+```
+
+```{r HPC_Ant L3 ANOVA}
+
+print("L Cue")
+L_CUE_L3_HPC_Ant.aov <- aov(L_CUE_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_CUE_L3_HPC_Ant.aov)
+
+print("R Cue")
+R_CUE_L3_HPC_Ant.aov <- aov(R_CUE_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_CUE_L3_HPC_Ant.aov)
+
+print("L Delay")
+L_DELAY_L3_HPC_Ant.aov <- aov(L_DELAY_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_DELAY_L3_HPC_Ant.aov)
+
+print("R Delay")
+R_DELAY_L3_HPC_Ant.aov <- aov(R_DELAY_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_DELAY_L3_HPC_Ant.aov)
+
+print("L Probe")
+L_PROBE_L3_HPC_Ant.aov <- aov(L_PROBE_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_PROBE_L3_HPC_Ant.aov)
+
+print("R Probe")
+R_PROBE_L3_HPC_Ant.aov <- aov(R_PROBE_L3 ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_PROBE_L3_HPC_Ant.aov)
+
+```
+
+### LE 
+
+```{r plot HPC LE Ant}
+
+DFR_HPC_Ant_plots[["L_CUE_LE"]] + DFR_HPC_Ant_plots[["L_DELAY_LE"]] + DFR_HPC_Ant_plots[["L_PROBE_LE"]]+
+  plot_annotation(title="HPC Ant during DFR task")
+
+DFR_HPC_Ant_plots[["R_CUE_LE"]] + DFR_HPC_Ant_plots[["R_DELAY_LE"]] + DFR_HPC_Ant_plots[["R_PROBE_LE"]]
+
+```
+
+```{r HPC_Ant LE ANOVA}
+
+print("L Cue")
+L_CUE_LE_HPC_Ant.aov <- aov(L_CUE_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_CUE_LE_HPC_Ant.aov)
+
+print("R Cue")
+R_CUE_LE_HPC_Ant.aov <- aov(R_CUE_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_CUE_LE_HPC_Ant.aov)
+
+print("L Delay")
+L_DELAY_LE_HPC_Ant.aov <- aov(L_DELAY_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_DELAY_LE_HPC_Ant.aov)
+
+print("R Delay")
+R_DELAY_LE_HPC_Ant.aov <- aov(R_DELAY_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_DELAY_LE_HPC_Ant.aov)
+
+print("L Probe")
+L_PROBE_LE_HPC_Ant.aov <- aov(L_PROBE_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(L_PROBE_LE_HPC_Ant.aov)
+
+print("R Probe")
+R_PROBE_LE_HPC_Ant.aov <- aov(R_PROBE_LE ~ level, data=split_DFR_HPC_Ant[["all"]])
+summary(R_PROBE_LE_HPC_Ant.aov)
+
+```
+
+## Medial
+
+### L3
+
+```{r plot HPC L3 Med}
+
+DFR_HPC_Med_plots[["L_CUE_L3"]] + DFR_HPC_Med_plots[["L_DELAY_L3"]] + DFR_HPC_Med_plots[["L_PROBE_L3"]]+
+  plot_annotation(title="HPC_Med during DFR task")
+
+DFR_HPC_Med_plots[["R_CUE_L3"]] + DFR_HPC_Med_plots[["R_DELAY_L3"]] + DFR_HPC_Med_plots[["R_PROBE_L3"]]
+
+```
+
+```{r HPC_Med L3 ANOVA}
+
+print("L Cue")
+L_CUE_L3_HPC_Med.aov <- aov(L_CUE_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_CUE_L3_HPC_Med.aov)
+
+print("R Cue")
+R_CUE_L3_HPC_Med.aov <- aov(R_CUE_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_CUE_L3_HPC_Med.aov)
+
+print("L Delay")
+L_DELAY_L3_HPC_Med.aov <- aov(L_DELAY_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_DELAY_L3_HPC_Med.aov)
+
+print("R Delay")
+R_DELAY_L3_HPC_Med.aov <- aov(R_DELAY_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_DELAY_L3_HPC_Med.aov)
+
+print("L Probe")
+L_PROBE_L3_HPC_Med.aov <- aov(L_PROBE_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_PROBE_L3_HPC_Med.aov)
+
+print("R Probe")
+R_PROBE_L3_HPC_Med.aov <- aov(R_PROBE_L3 ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_PROBE_L3_HPC_Med.aov)
+
+```
+
+### LE
+
+```{r plot HPC LE Med}
+
+DFR_HPC_Med_plots[["L_CUE_LE"]] + DFR_HPC_Med_plots[["L_DELAY_LE"]] + DFR_HPC_Med_plots[["L_PROBE_LE"]]+
+  plot_annotation(title="HPC_Med during DFR task")
+
+DFR_HPC_Med_plots[["R_CUE_LE"]] + DFR_HPC_Med_plots[["R_DELAY_LE"]] + DFR_HPC_Med_plots[["R_PROBE_LE"]]
+
+```
+
+```{r HPC_Med LE ANOVA}
+
+print("L Cue")
+L_CUE_LE_HPC_Med.aov <- aov(L_CUE_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_CUE_LE_HPC_Med.aov)
+
+print("R Cue")
+R_CUE_LE_HPC_Med.aov <- aov(R_CUE_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_CUE_LE_HPC_Med.aov)
+
+print("L Delay")
+L_DELAY_LE_HPC_Med.aov <- aov(L_DELAY_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_DELAY_LE_HPC_Med.aov)
+
+print("R Delay")
+R_DELAY_LE_HPC_Med.aov <- aov(R_DELAY_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_DELAY_LE_HPC_Med.aov)
+
+print("L Probe")
+L_PROBE_LE_HPC_Med.aov <- aov(L_PROBE_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(L_PROBE_LE_HPC_Med.aov)
+
+print("R Probe")
+R_PROBE_LE_HPC_Med.aov <- aov(R_PROBE_LE ~ level, data=split_DFR_HPC_Med[["all"]])
+summary(R_PROBE_LE_HPC_Med.aov)
+
+```
+
+## Posterior
+
+### L3
+
+```{r plot HPC L3 Post}
+
+DFR_HPC_Post_plots[["L_CUE_L3"]] + DFR_HPC_Post_plots[["L_DELAY_L3"]] + DFR_HPC_Post_plots[["L_PROBE_L3"]]+
+  plot_annotation(title="HPC_Post during DFR task")
+
+DFR_HPC_Post_plots[["R_CUE_L3"]] + DFR_HPC_Post_plots[["R_DELAY_L3"]] + DFR_HPC_Post_plots[["R_PROBE_L3"]]
+
+```
+
+```{r HPC_Post L3 ANOVA}
+
+print("L Cue")
+L_CUE_L3_HPC_Post.aov <- aov(L_CUE_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_CUE_L3_HPC_Post.aov)
+
+print("R Cue")
+R_CUE_L3_HPC_Post.aov <- aov(R_CUE_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_CUE_L3_HPC_Post.aov)
+
+print("L Delay")
+L_DELAY_L3_HPC_Post.aov <- aov(L_DELAY_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_DELAY_L3_HPC_Post.aov)
+
+print("R Delay")
+R_DELAY_L3_HPC_Post.aov <- aov(R_DELAY_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_DELAY_L3_HPC_Post.aov)
+
+print("L Probe")
+L_PROBE_L3_HPC_Post.aov <- aov(L_PROBE_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_PROBE_L3_HPC_Post.aov)
+
+print("R Probe")
+R_PROBE_L3_HPC_Post.aov <- aov(R_PROBE_L3 ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_PROBE_L3_HPC_Post.aov)
+
+```
+
+### LE
+
+```{r plot HPC LE Post}
+
+DFR_HPC_Post_plots[["L_CUE_LE"]] + DFR_HPC_Post_plots[["L_DELAY_LE"]] + DFR_HPC_Post_plots[["L_PROBE_LE"]]+
+  plot_annotation(title="HPC_Post during DFR task")
+
+DFR_HPC_Post_plots[["R_CUE_LE"]] + DFR_HPC_Post_plots[["R_DELAY_LE"]] + DFR_HPC_Post_plots[["R_PROBE_LE"]]
+
+```
+
+```{r HPC_Post LE ANOVA}
+
+print("L Cue")
+L_CUE_LE_HPC_Post.aov <- aov(L_CUE_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_CUE_LE_HPC_Post.aov)
+
+print("R Cue")
+R_CUE_LE_HPC_Post.aov <- aov(R_CUE_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_CUE_LE_HPC_Post.aov)
+
+print("L Delay")
+L_DELAY_LE_HPC_Post.aov <- aov(L_DELAY_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_DELAY_LE_HPC_Post.aov)
+
+print("R Delay")
+R_DELAY_LE_HPC_Post.aov <- aov(R_DELAY_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_DELAY_LE_HPC_Post.aov)
+
+print("L Probe")
+L_PROBE_LE_HPC_Post.aov <- aov(L_PROBE_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(L_PROBE_LE_HPC_Post.aov)
+
+print("R Probe")
+R_PROBE_LE_HPC_Post.aov <- aov(R_PROBE_LE ~ level, data=split_DFR_HPC_Post[["all"]])
+summary(R_PROBE_LE_HPC_Post.aov)
+
+```
+
+# Cortical Thickness 
+
+Only see differences in the L probe regions, with med > high. 
+
+```{r plot cortical thickness splits}
+
+cortical_thickness_plots[["Cue_RH"]] + cortical_thickness_plots[["Delay_RH"]] + cortical_thickness_plots[["Probe_RH"]] + 
+  plot_annotation(title="Cortical Thickness from DFR Full Mask") 
+
+cortical_thickness_plots[["Cue_LH"]] + cortical_thickness_plots[["Delay_LH"]] + cortical_thickness_plots[["Probe_LH"]]
+
+```
+
+```{r cortical thickness ANOVA}
+
+print("L Cue")
+L_CUE_DFR_thick.aov <- aov(Cue_LH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(L_CUE_DFR_thick.aov)
+
+print("R Cue")
+R_CUE_DFR_thick.aov <- aov(Cue_RH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(R_CUE_LE_HPC_Post.aov)
+
+print("L Delay")
+L_DELAY_DFR_thick.aov <- aov(Delay_LH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(L_DELAY_DFR_thick.aov)
+
+print("R Delay")
+R_DELAY_DFR_thick.aov <- aov(Delay_RH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(R_DELAY_DFR_thick.aov)
+
+print("L Probe")
+L_PROBE_DFR_thick.aov <- aov(Probe_LH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(L_PROBE_DFR_thick.aov)
+
+print("R Probe")
+R_PROBE_DFR_thick.aov <- aov(Probe_RH ~ level, data=split_cortical_thickness_DFR[["all"]])
+summary(R_PROBE_DFR_thick.aov)
+TukeyHSD(R_PROBE_DFR_thick.aov)
+
+```
+
+# Resting State Functional Connectivity 
+
+## Within Network 
+
+Differences within FPCN (med > high) and VAN (med and low > high). 
+
+```{r plot within network RS}
+
+RS_plots[["FPCN_FPCN"]] + RS_plots[["DMN_DMN"]] + RS_plots[["DAN_DAN"]]+
+  plot_annotation(title="Resting State Functional Connectivity - Within Networks")
+RS_plots[["VAN_VAN"]] + RS_plots[["CO_CO"]] + RS_plots[["visual_visual"]]
+
+```
+
+```{r sig testing within network RS}
+
+print("FPCN")
+FPCN.aov <- aov(FPCN_FPCN ~ level, data=split_RS[["all"]])
+summary(FPCN.aov)
+TukeyHSD(FPCN.aov)
+
+print("DMN")
+DMN.aov <- aov(DMN_DMN ~ level, data=split_RS[["all"]])
+summary(DMN.aov)
+
+print("DAN")
+DAN.aov <- aov(DAN_DAN ~ level, data=split_RS[["all"]])
+summary(DAN.aov)
+
+print("VAN")
+VAN.aov <- aov(VAN_VAN ~ level, data=split_RS[["all"]])
+summary(VAN.aov)
+TukeyHSD(VAN.aov)
+
+print("CO")
+CO.aov <- aov(CO_CO ~ level, data=split_RS[["all"]])
+summary(CO.aov)
+
+print("CO")
+visual.aov <- aov(visual_visual ~ level, data=split_RS[["all"]])
+summary(visual.aov)
+
+```
+
+## Across Network 
+
+No across RS network differences. 
+
+```{r plot across network RS}
+
+RS_plots[["FPCN_DMN"]] + RS_plots[["FPCN_DAN"]] + RS_plots[["FCPN_VAN"]]+
+  plot_annotation(title="Resting State Functional Connectivity - Across Networks")
+RS_plots[["FPCN_CO"]] + RS_plots[["FPCN_visual"]]
+
+
+```
+
+```{r sig testing across network RS}
+
+print("FPCN DMN")
+FPCN_DMN.aov <- aov(FPCN_DMN ~ level, data=split_RS[["all"]])
+summary(FPCN_DMN.aov)
+
+print("FPCN DAN")
+FPCN_DAN.aov <- aov(FPCN_DAN ~ level, data=split_RS[["all"]])
+summary(FPCN_DAN.aov)
+
+print("FPCN VAN")
+FPCN_VAN.aov <- aov(FPCN_VAN ~ level, data=split_RS[["all"]])
+summary(FPCN_VAN.aov)
+
+print("FPCN CO")
+FPCN_CO.aov <- aov(FPCN_CO ~ level, data=split_RS[["all"]])
+summary(FPCN_CO.aov)
+
+print("FPCN visual")
+FPCN_visual.aov <- aov(FPCN_visual ~ level, data=split_RS[["all"]])
+summary(FPCN_visual.aov)
+
+```
+
+# Beta Series Connectivity 
+
+## Cue Period 
+
+### High Load
+
+Differences in the beta series connectivity for FPCN/HPC connectivity (med > high), FPCN/FFA (med and low > high), and HPC/FFA (med > high)
+
+```{r beta conn cue L3} 
+
+beta_conn_cue_plots[["FPCN_FPCN_L3"]] + beta_conn_cue_plots[["FPCN_HPC_L3"]] +
+  plot_annotation(title = "Beta Series Connectivity at High Load")
+beta_conn_cue_plots[["FPCN_FFA_L3"]] + beta_conn_cue_plots[["HPC_FFA_L3"]]
+
+```
+
+```{r sig test beta conn cue L3}
+
+FPCN_FPCN_BC_cue_L3.aov <- aov(FPCN_FPCN_L3 ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_FPCN_BC_cue_L3.aov)
+
+FPCN_HPC_BC_cue_L3.aov <- aov(FPCN_HPC_L3 ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_HPC_BC_cue_L3.aov)
+TukeyHSD(FPCN_HPC_BC_cue_L3.aov)
+
+FPCN_FFA_BC_cue_L3.aov <- aov(FPCN_FFA_L3 ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_FFA_BC_cue_L3.aov)
+TukeyHSD(FPCN_FFA_BC_cue_L3.aov)
+
+HPC_FFA_BC_cue_L3.aov <- aov(HPC_FFA_L3 ~ level, data = split_beta_conn_cue[["all"]])
+summary(HPC_FFA_BC_cue_L3.aov)
+TukeyHSD(HPC_FFA_BC_cue_L3.aov)
+
+```
+
+#### Scatter Plots 
+
+```{r scatter plots beta series conn cue}
+
+data_for_plot <- merge(p200_data,p200_beta_conn_cue,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=FPCN_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=2,label="r=-0.22**")+
+  ggtitle("FPCN/FFA L3")
+
+print("FPCN/FFA L3")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$FPCN_FFA_L3)
+
+```
+
+### Load Effect 
+
+For the load effects, however, we only see FPCN/FPCN (med > high) and FPCN/FFA (low > high). 
+
+```{r beta conn cue LE} 
+
+beta_conn_cue_plots[["FPCN_FPCN_LE"]] + beta_conn_cue_plots[["FPCN_HPC_LE"]] +
+  plot_annotation(title = "Beta Series Connectivity Load Effect")
+beta_conn_cue_plots[["FPCN_FFA_LE"]] + beta_conn_cue_plots[["HPC_FFA_LE"]]
+
+```
+
+```{r sig testing beta conn cue LE}
+
+FPCN_FPCN_BC_cue_LE.aov <- aov(FPCN_FPCN_LE ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_FPCN_BC_cue_LE.aov)
+TukeyHSD(FPCN_FPCN_BC_cue_LE.aov)
+
+FPCN_HPC_BC_cue_LE.aov <- aov(FPCN_HPC_LE ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_HPC_BC_cue_LE.aov)
+
+FPCN_FFA_BC_cue_LE.aov <- aov(FPCN_FFA_LE ~ level, data = split_beta_conn_cue[["all"]])
+summary(FPCN_FFA_BC_cue_LE.aov)
+TukeyHSD(FPCN_FFA_BC_cue_LE.aov)
+
+HPC_FFA_BC_cue_LE.aov <- aov(HPC_FFA_LE ~ level, data = split_beta_conn_cue[["all"]])
+summary(HPC_FFA_BC_cue_LE.aov)
+
+
+```
+
+
+## Delay Period 
+
+No differences for the beta series connectivity during delay period. 
+
+### High Load
+
+```{r beta conn delay L3} 
+
+beta_conn_delay_plots[["FPCN_FPCN_L3"]] + beta_conn_delay_plots[["FPCN_HPC_L3"]] +
+  plot_annotation(title = "Beta Series Connectivity at High Load")
+beta_conn_delay_plots[["FPCN_FFA_L3"]] + beta_conn_delay_plots[["HPC_FFA_L3"]]
+
+```
+
+```{r sig testing beta conn L3}
+
+FPCN_FPCN_BC_delay_L3.aov <- aov(FPCN_FPCN_L3 ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_FPCN_BC_delay_L3.aov)
+
+FPCN_HPC_BC_delay_L3.aov <- aov(FPCN_HPC_L3 ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_HPC_BC_delay_L3.aov)
+
+FPCN_FFA_BC_delay_L3.aov <- aov(FPCN_FFA_L3 ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_FFA_BC_delay_L3.aov)
+
+HPC_FFA_BC_delay_L3.aov <- aov(HPC_FFA_L3 ~ level, data = split_beta_conn_delay[["all"]])
+summary(HPC_FFA_BC_delay_L3.aov)
+
+```
+
+#### Scatter plots 
+
+```{r scatter plots beta series conn delay}
+
+data_for_plot <- merge(p200_data,p200_beta_conn_delay,by="PTID")
+
+ggplot(data = data_for_plot, aes(x=XDFR_MRI_ACC_L3,y=FPCN_HPC_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.9,y=1.25,label="r=-0.18*")+
+  ggtitle("FPCN/HPC L3")
+
+print("FPCN/HPC L3")
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$FPCN_HPC_L3)
+
+```
+
+### Load Effect 
+
+```{r beta conn delay LE} 
+
+beta_conn_delay_plots[["FPCN_FPCN_LE"]] + beta_conn_delay_plots[["FPCN_HPC_LE"]] +
+  plot_annotation(title = "Beta Series Connectivity Load Effect")
+beta_conn_delay_plots[["FPCN_FFA_LE"]] + beta_conn_delay_plots[["HPC_FFA_LE"]]
+
+```
+
+```{r sig testing beta conn delay LE}
+
+FPCN_FPCN_BC_delay_LE.aov <- aov(FPCN_FPCN_LE ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_FPCN_BC_delay_LE.aov)
+
+FPCN_HPC_BC_delay_LE.aov <- aov(FPCN_HPC_LE ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_HPC_BC_delay_LE.aov)
+
+FPCN_FFA_BC_delay_LE.aov <- aov(FPCN_FFA_LE ~ level, data = split_beta_conn_delay[["all"]])
+summary(FPCN_FFA_BC_delay_LE.aov)
+
+HPC_FFA_BC_delay_LE.aov <- aov(HPC_FFA_LE ~ level, data = split_beta_conn_delay[["all"]])
+summary(HPC_FFA_BC_delay_LE.aov)
+TukeyHSD(HPC_FFA_BC_delay_LE.aov)
+
+```
+
+# BCT Measures 
+
+No differences in any of the BCT measures. 
+
+## Overall Measures 
+
+```{r plot BCT measures}
+
+BCT_plots[["Participation_Coef_Mean"]] + BCT_plots[["Global_Eff"]] + BCT_plots[["Modularity_Louvain_N"]]+
+  plot_annotation(title="Overall BCT Measures")
+
+```
+
+```{r sig testing overall BCT measures}
+print("Mean Participation Coefficient")
+partic_coef_mean.aov <- aov(Participation_Coef_Mean ~ level, data = split_BCT[["all"]])
+summary(partic_coef_mean.aov)
+
+print("Global Efficiency")
+global_eff.aov <- aov(Global_Eff ~ level, data = split_BCT[["all"]])
+summary(global_eff.aov)
+
+print("Modularity")
+modularity.aov <- aov(Modularity_Louvain_N ~ level, data = split_BCT[["all"]])
+summary(modularity.aov)
+
+```
+
+## Individual Networks 
+
+```{r plot individual network participation coefficients}
+
+indiv_partic_coeff_plots[["FrontoParietal"]] + indiv_partic_coeff_plots[["Default"]] + indiv_partic_coeff_plots[["DorsalAttn"]]+
+  plot_annotation(title="Individual Network Participation Coefficient")
+indiv_partic_coeff_plots[["CinguloOperc"]] + indiv_partic_coeff_plots[["VentralAttn"]] + indiv_partic_coeff_plots[["Visual"]]
+
+```
+
+```{r sig test indiv partic coeff}
+
+print("FPCN")
+FPCN_indiv_coeff.aov <- aov(FrontoParietal ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(FPCN_indiv_coeff.aov)
+
+print("DMN")
+DMN_indiv_coeff.aov <- aov(Default ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(DMN_indiv_coeff.aov)
+
+print("DAN")
+DAN_indiv_coeff.aov <- aov(DorsalAttn ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(DAN_indiv_coeff.aov)
+
+print("CO")
+CO_indiv_coeff.aov <- aov(CinguloOperc ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(CO_indiv_coeff.aov)
+
+print("VAN")
+VAN_indiv_coeff.aov <- aov(VentralAttn ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(VAN_indiv_coeff.aov)
+
+print("visual")
+visual_indiv_coeff.aov <- aov(Visual ~ level, data = split_indiv_partic_coeff[["all"]])
+summary(visual_indiv_coeff.aov)
+
+
+```
+

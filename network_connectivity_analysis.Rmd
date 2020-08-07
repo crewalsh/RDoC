@@ -1,0 +1,487 @@
+---
+title: "Network Connectivity"
+author: "Catherine Walsh"
+date: "7/3/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(reticulate)
+library(tidyverse)
+library(psych)
+library(rmatio)
+library(reshape2)
+
+load("data/behav.RData")
+
+RMS <- function(data){return(sqrt(sum(data^2)))}
+
+```
+
+```{python import correlation data from python}
+
+import numpy
+DFR_corr = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/DFR_corr.npy')
+rest_corr = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/rest_corr.npy')
+FPCN_DFR =  numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/FPCN_submatrix_DFR.npy')
+FPCN_rest =  numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/FPCN_submatrix_rest.npy')
+
+DFR_all = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/DFR_all.npy')
+#rest_all = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/rest_all.npy')
+
+```
+
+```{r collect python dataframes}
+
+DFR_corr <- py$DFR_corr 
+rest_corr <- py$rest_corr
+FPCN_submatrix_DFR <- py$FPCN_DFR
+FPCN_submatrix_rest <- py$FPCN_rest
+DFR_all <- py$DFR_all
+
+```
+
+```{r load other data}
+
+suj_list <- read.csv('data/fMRI_demographics.csv')
+region_list <- read.delim('data/Schaefer2018_400Parcels_7Networks_order.txt', header=FALSE)
+
+mat_data <- read.mat('data/WSBM_output.mat')
+
+```
+
+```{r average regions}
+
+avg_DFR <- apply(DFR_corr, c(1,2), mean)
+avg_rest <- apply(rest_corr, c(1,2), mean, na.rm=TRUE)
+
+```
+
+```{r average over networks}
+
+DFR_network_avg <- data.frame(matrix(nrow=7,ncol=7))
+rest_network_avg <- data.frame(matrix(nrow=7,ncol=7))
+
+vis_idx <- region_list[grep(paste("Vis"), region_list$V2),][1]
+som_mot_idx <- region_list[grep(paste("SomMot"), region_list$V2),][1]
+DAN_idx <- region_list[grep(paste("DorsAttn"), region_list$V2),][1]
+VAN_idx <- region_list[grep(paste("SalVentAttn"), region_list$V2),][1]
+limbic_idx <- region_list[grep(paste("Limbic"), region_list$V2),][1]
+FPCN_idx <- region_list[grep(paste("Cont"), region_list$V2),][1]
+DMN_idx <- region_list[grep(paste("Default"), region_list$V2),][1]
+
+region_idx_list <- list(Vis = vis_idx, SM = som_mot_idx, DAN=DAN_idx, VAN=VAN_idx, LM=limbic_idx, FPCN=FPCN_idx, DMN=DMN_idx)
+
+for (region1 in seq.int(1,7)){
+  for (region2 in seq.int(1,7)){
+    DFR_network_avg[region1, region2] <- mean(mean(avg_DFR[region_idx_list[[region1]]$V1,region_idx_list[[region2]]$V1]))
+    rest_network_avg[region1, region2] <- mean(mean(avg_rest[region_idx_list[[region1]]$V1,region_idx_list[[region2]]$V1], na.rm=TRUE))
+  }
+}
+
+colnames(DFR_network_avg) <- seq.int(1,7)
+colnames(rest_network_avg) <- seq.int(1,7)
+
+
+# rownames(DFR_network_avg) <- names(region_idx_list)
+# colnames(DFR_network_avg) <- names(region_idx_list)
+# rownames(rest_network_avg) <- names(region_idx_list)
+# colnames(rest_network_avg) <- names(region_idx_list)
+
+
+```
+
+```{r system average by FPCN subnetworks}
+
+most_sim_partition <- mat_data$DFR_labels[,mat_data$max_sim_DFR_idx]
+FPCN_A_idx <- data.frame(V1=FPCN_idx[most_sim_partition == 1,])
+FPCN_B_idx <- data.frame(V1=FPCN_idx[most_sim_partition == 2,])
+
+subregion_idx_list <- list(Vis = vis_idx, SM = som_mot_idx, DAN=DAN_idx, VAN=VAN_idx, LM=limbic_idx, FPCN_A=FPCN_A_idx,FPCN_B=FPCN_B_idx, DMN=DMN_idx)
+
+
+DFR_subnetwork_avg <- data.frame(matrix(nrow=8,ncol=8))
+rest_subnetwork_avg <- data.frame(matrix(nrow=8,ncol=8))
+
+for (region1 in seq.int(1,8)){
+  for (region2 in seq.int(1,8)){
+    DFR_subnetwork_avg[region1, region2] <- mean(mean(avg_DFR[subregion_idx_list[[region1]]$V1,subregion_idx_list[[region2]]$V1]))
+    rest_subnetwork_avg[region1, region2] <- mean(mean(avg_rest[subregion_idx_list[[region1]]$V1,subregion_idx_list[[region2]]$V1], na.rm=TRUE))
+  }
+}
+
+colnames(DFR_subnetwork_avg) <- seq.int(1,8)
+colnames(rest_subnetwork_avg) <- seq.int(1,8)
+
+```
+
+```{r indiv subj avg network connections}
+
+DFR_network_indiv <- array(dim = c(7,7,170))
+rest_network_indiv <- array(dim = c(7,7,170))
+
+for (suj in seq.int(1,170)){
+  for (region1 in seq.int(1,7)){
+    for (region2 in seq.int(1,7)){
+      DFR_network_indiv[region1, region2,suj] <- mean(mean(DFR_corr[region_idx_list[[region1]]$V1,region_idx_list[[region2]]$V1,suj]))
+      rest_network_indiv[region1, region2,suj] <- mean(mean(rest_corr[region_idx_list[[region1]]$V1,region_idx_list[[region2]]$V1,suj], na.rm=TRUE))
+    }
+  }
+}
+
+```
+
+```{r average time series} 
+
+network_indiv_timeseries <- array(dim = c(884,7,170))
+network_avg_timeseries <- data.frame(matrix(nrow=884,ncol=7))
+colnames(network_avg_timeseries) <- names(region_idx_list)
+
+for (network in seq.int(1,7)){
+  for (suj in seq.int(1,170)){
+    network_indiv_timeseries[,network,suj] <- apply(DFR_all[,region_idx_list[[network]]$V1,suj], 1, mean)
+  }
+  network_avg_timeseries[,network] <- apply(network_indiv_timeseries[,network,],1, mean)
+}
+
+```
+
+```{r average subnetwork time series} 
+
+subnetwork_indiv_timeseries <- array(dim = c(884,8,170))
+subnetwork_avg_timeseries <- data.frame(matrix(nrow=884,ncol=8))
+colnames(subnetwork_avg_timeseries) <- names(subregion_idx_list)
+
+for (network in seq.int(1,8)){
+  for (suj in seq.int(1,170)){
+    subnetwork_indiv_timeseries[,network,suj] <- apply(DFR_all[,subregion_idx_list[[network]]$V1,suj], 1, mean)
+  }
+  subnetwork_avg_timeseries[,network] <- apply(subnetwork_indiv_timeseries[,network,],1, mean)
+}
+
+```
+
+```{r plot time series}
+
+all_avg_timeseries <- merge(network_avg_timeseries, subnetwork_avg_timeseries)
+
+ggplot(all_avg_timeseries)+
+  geom_line(aes(x=seq.int(1,884),y=FPCN))+
+  geom_line(aes(x=seq.int(1,884),y=DMN),color="blue")+
+  xlab("Time (TR)")+
+  ggtitle("Comparing entire FPCN to DMN")
+
+ggplot(all_avg_timeseries)+
+  geom_line(aes(x=seq.int(1,884),y=FPCN_A),color="red")+
+  geom_line(aes(x=seq.int(1,884),y=FPCN_B),color="green")+
+  geom_line(aes(x=seq.int(1,884),y=DMN),color="blue")+
+  xlab("Time (TR)")+
+  ggtitle("Comparing FPCN subnetworks to DMN")
+
+
+```
+
+
+```{r create heatmaps to plot}
+
+DFR_network_avg %>%
+  
+  # Data wrangling
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  
+  # Change Y to numeric
+  mutate(Y=as.numeric(gsub("V","",Y))) %>%
+  
+  # Viz
+  ggplot(aes(X, Y, fill= Z)) + 
+  geom_tile() +
+  scale_y_continuous(breaks = seq(1,7, by = 1), labels=names(region_idx_list))+
+  scale_x_continuous(breaks = seq(1,7, by = 1), labels=names(region_idx_list))+
+  theme_classic()+
+  ylab("Systems")+
+  xlab("Systems")+
+  ggtitle("System average during DFR task")
+
+rest_network_avg %>%
+  
+  # Data wrangling
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  
+  # Change Y to numeric
+  mutate(Y=as.numeric(gsub("V","",Y))) %>%
+  
+  # Viz
+  ggplot(aes(X, Y, fill= Z)) + 
+  geom_tile() +
+  scale_y_continuous(breaks = seq(1,7, by = 1), labels=names(region_idx_list))+
+  scale_x_continuous(breaks = seq(1,7, by = 1), labels=names(region_idx_list))+
+  theme_classic()+
+  ylab("Systems")+
+  xlab("Systems")+
+  ggtitle("System average during rest") 
+
+```
+
+
+```{r create heatmaps to plot}
+
+DFR_subnetwork_avg %>%
+  
+  # Data wrangling
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  
+  # Change Y to numeric
+  mutate(Y=as.numeric(gsub("V","",Y))) %>%
+  
+  # Viz
+  ggplot(aes(X, Y, fill= Z)) + 
+  geom_tile() +
+  scale_y_continuous(breaks = seq(1,8, by = 1), labels=names(subregion_idx_list))+
+  scale_x_continuous(breaks = seq(1,8, by = 1), labels=names(subregion_idx_list))+
+  theme_classic()+
+  ylab("Systems")+
+  xlab("Systems")+
+  ggtitle("System average during DFR task")
+
+rest_subnetwork_avg %>%
+  
+  # Data wrangling
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  
+  # Change Y to numeric
+  mutate(Y=as.numeric(gsub("V","",Y))) %>%
+  
+  # Viz
+  ggplot(aes(X, Y, fill= Z)) + 
+  geom_tile() +
+  scale_y_continuous(breaks = seq(1,8, by = 1), labels=names(subregion_idx_list))+
+  scale_x_continuous(breaks = seq(1,8, by = 1), labels=names(subregion_idx_list))+
+  theme_classic()+
+  ylab("Systems")+
+  xlab("Systems")+
+  ggtitle("System average during rest task") 
+
+```
+```{r add colnames and rownames for dataframes, include=FALSE}
+
+colnames(DFR_network_avg) <- names(region_idx_list)
+rownames(DFR_network_avg) <- names(region_idx_list)
+
+colnames(rest_network_avg) <- names(region_idx_list)
+rownames(rest_network_avg) <- names(region_idx_list)
+
+colnames(DFR_subnetwork_avg) <- names(subregion_idx_list)
+rownames(DFR_subnetwork_avg) <- names(subregion_idx_list)
+
+colnames(rest_subnetwork_avg) <- names(subregion_idx_list)
+rownames(rest_subnetwork_avg) <- names(subregion_idx_list)
+
+```
+
+```{r indiv subj avg network connections}
+
+DFR_subnetwork_indiv <- array(dim = c(8,8,170))
+rest_subnetwork_indiv <- array(dim = c(8,8,170))
+
+for (suj in seq.int(1,170)){
+  for (region1 in seq.int(1,8)){
+    for (region2 in seq.int(1,8)){
+      DFR_subnetwork_indiv[region1, region2,suj] <- mean(mean(DFR_corr[subregion_idx_list[[region1]]$V1,subregion_idx_list[[region2]]$V1,suj]))
+      rest_subnetwork_indiv[region1, region2,suj] <- mean(mean(rest_corr[subregion_idx_list[[region1]]$V1,subregion_idx_list[[region2]]$V1,suj], na.rm=TRUE))
+    }
+  }
+}
+
+```
+
+```{r organize indiv network for plot}
+
+wide_indiv_FPCN_A_corr <- data.frame(matrix(nrow=170,ncol=9))
+colnames(wide_indiv_FPCN_A_corr) <- c("PTID",names(subregion_idx_list))
+
+wide_indiv_FPCN_B_corr <- data.frame(matrix(nrow=170,ncol=9))
+colnames(wide_indiv_FPCN_B_corr) <- c("PTID",names(subregion_idx_list))
+
+wide_indiv_FPCN_A_rest_corr <- data.frame(matrix(nrow=170,ncol=9))
+colnames(wide_indiv_FPCN_A_rest_corr) <- c("PTID",names(subregion_idx_list))
+
+wide_indiv_FPCN_B_rest_corr <- data.frame(matrix(nrow=170,ncol=9))
+colnames(wide_indiv_FPCN_B_rest_corr) <- c("PTID",names(subregion_idx_list))
+
+
+for (suj in seq.int(1,170)){
+  for (network in seq.int(2,9)){
+    wide_indiv_FPCN_A_corr[suj,network] <- DFR_subnetwork_indiv[6,network-1,suj] 
+    wide_indiv_FPCN_B_corr[suj,network] <- DFR_subnetwork_indiv[7,network-1,suj] 
+    
+    wide_indiv_FPCN_A_rest_corr[suj,network] <- rest_subnetwork_indiv[6,network-1,suj] 
+    wide_indiv_FPCN_B_rest_corr[suj,network] <- rest_subnetwork_indiv[7,network-1,suj] 
+  }
+}
+
+# DFR 
+
+wide_indiv_FPCN_A_corr$PTID <- constructs_fMRI$PTID
+wide_indiv_FPCN_B_corr$PTID <- constructs_fMRI$PTID
+
+temp <- melt(wide_indiv_FPCN_A_corr, id.vars = c("PTID"))
+colnames(temp) <- c("PTID","network","FPCN_A")
+temp2 <- melt(wide_indiv_FPCN_B_corr, id.vars = c("PTID"))
+colnames(temp2) <- c("PTID","network","FPCN_B")
+
+FPCN_corr_long <- merge(temp,temp2, by=c("PTID","network"))
+FPCN_corr_long <- melt(FPCN_corr_long, id.vars=c("PTID","network"))
+colnames(FPCN_corr_long) <- c("PTID", "network", "FPCN", "corr")
+
+#rest 
+
+wide_indiv_FPCN_A_rest_corr$PTID <- constructs_fMRI$PTID
+wide_indiv_FPCN_B_rest_corr$PTID <- constructs_fMRI$PTID
+
+temp <- melt(wide_indiv_FPCN_A_rest_corr, id.vars = c("PTID"))
+colnames(temp) <- c("PTID","network","FPCN_A")
+temp2 <- melt(wide_indiv_FPCN_B_rest_corr, id.vars = c("PTID"))
+colnames(temp2) <- c("PTID","network","FPCN_B")
+
+FPCN_corr_rest_long <- merge(temp,temp2, by=c("PTID","network"))
+FPCN_corr_rest_long <- melt(FPCN_corr_rest_long, id.vars=c("PTID","network"))
+colnames(FPCN_corr_rest_long) <- c("PTID", "network", "FPCN", "corr")
+
+```
+
+```{r make plots - DFR}
+
+ggplot(FPCN_corr_long%>% filter(network=="DMN"), aes(x=FPCN,y=corr))+
+  geom_jitter()+ 
+  stat_summary(fun.data=mean_sdl, geom="pointrange", color="red")
+
+ggplot(FPCN_corr_long, aes(x=network, y=corr,color=FPCN)) + 
+  geom_violin(trim = FALSE)+
+  #geom_jitter(position=position_dodge(0.8))+
+  stat_summary(fun.y=mean, geom="point", shape=18,size=3,position=position_dodge(0.9))
+
+```
+
+```{r make plots - rest}
+
+ggplot(FPCN_corr_rest_long%>% filter(network=="DMN"), aes(x=FPCN,y=corr))+
+  geom_jitter()+ 
+  stat_summary(fun.data=mean_sdl, mult=1, geom="pointrange", color="red")
+
+ggplot(FPCN_corr_rest_long, aes(x=network, y=corr,color=FPCN)) + 
+  geom_violin(trim = FALSE)+
+  #geom_jitter(position=position_dodge(0.8))+
+  stat_summary(fun.y=mean, geom="point", shape=18,size=3,position=position_dodge(0.9))
+
+```
+
+```{r calculate RMS per network}
+
+subnetwork_RMS_activity <- data.frame(matrix(nrow=170,ncol=8))
+colnames(subnetwork_RMS_activity) <- names(subregion_idx_list)
+
+for (suj in seq.int(1,170)){
+  for (network in seq.int(1,8)){
+    subnetwork_RMS_activity[suj,network] <- RMS(subnetwork_indiv_timeseries[,network,suj])
+  }
+}
+
+```
+
+```{r compare RMS to DMN and DAN activity}
+
+activ_corr_plot_data <- data.frame(FPCN_A_activity = subnetwork_RMS_activity$FPCN_A,
+                                   FPCN_B_activity = subnetwork_RMS_activity$FPCN_B,
+                                   DMN_FPCN_corr = DFR_network_indiv[6,7,], 
+                                   DAN_FPCN_corr = DFR_network_indiv[3,6,])
+
+ggplot(data=activ_corr_plot_data,aes(x=FPCN_A_activity, y = DMN_FPCN_corr))+
+  geom_point()+
+  stat_smooth(method='lm')
+
+ggplot(data=activ_corr_plot_data,aes(x=FPCN_B_activity, y = DMN_FPCN_corr))+
+  geom_point()+
+  stat_smooth(method='lm')
+
+
+ggplot(data=activ_corr_plot_data,aes(x=FPCN_A_activity, y = DAN_FPCN_corr))+
+  geom_point()+
+  stat_smooth(method='lm')
+
+ggplot(data=activ_corr_plot_data,aes(x=FPCN_B_activity, y = DAN_FPCN_corr))+
+  geom_point()+
+  stat_smooth(method='lm')
+
+```
+```{r corr behav to subnetwork activity}
+
+brain_behav_plot_data <- data.frame(span = constructs_fMRI$omnibus_span_no_DFR_MRI, WHODAS = p200_clinical_zscores[p200_clinical_zscores$PTID %in% constructs_fMRI$PTID,]$WHO_ST_S32, BPRS = p200_clinical_zscores[p200_clinical_zscores$PTID %in% constructs_fMRI$PTID,]$BPRS_TOT, acc_L3 = p200_data[p200_data$PTID %in% constructs_fMRI$PTID,]$XDFR_MRI_ACC_L3, acc_LE = p200_data[p200_data$PTID %in% constructs_fMRI$PTID,]$XDFR_MRI_ACC_L3-p200_data[p200_data$PTID %in% constructs_fMRI$PTID,]$XDFR_MRI_ACC_L1)
+
+brain_behav_plot_data <- cbind(brain_behav_plot_data, activ_corr_plot_data)
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_A_activity,y=span))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_B_activity,y=span))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_A_activity,y=acc_L3))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_B_activity,y=acc_L3))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_A_activity,y=acc_LE))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_B_activity,y=acc_LE))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_A_activity,y=BPRS))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data= brain_behav_plot_data,aes(x=FPCN_B_activity,y=BPRS))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+
+
+
+
+```
+```{r similarity to behav} 
+
+plot_data <- cbind(brain_behav_plot_data, mat_data$rand_index_DFR[,81])
+colnames(plot_data)[10] <- "DFR_rand_z_score"
+
+ggplot(data=plot_data,aes(x=DFR_rand_z_score,y=span))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data=plot_data,aes(x=DFR_rand_z_score,y=BPRS))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data=plot_data,aes(x=DFR_rand_z_score,y=acc_L3))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+```
+

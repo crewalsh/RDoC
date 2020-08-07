@@ -1,0 +1,926 @@
+---
+title: "RDoC Linear Relationships"
+author: "Catherine Walsh"
+date: "3/4/2020"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries}
+library(dplyr)
+library(skimr)
+library(corrplot)
+library(psych)
+library(ggplot2)
+library(patchwork)
+library(reshape2)
+
+source("helper_fxns/cor_regress.R")
+
+```
+
+```{r load in data}
+
+load('data/load_effects_DFR.RData')
+load('data/behav.RData')
+load('data/connectivity_data.RData')
+load('data/structural_measures.RData')
+
+
+scanner_cov <- p200_demographics[,c(1,4)]
+
+col <- colorRampPalette(c("dark blue","light blue", "light green", "yellow", "orange", "red"))(200) 
+
+```
+
+# Behavioral Correlations 
+
+First, let's look at the relationship between accuracy on the DFR task and our constructs. People with higher capacity do better. This is a nice sanity check. We're not going to include the scanner as the covariate because there's no need to think there's an issue because none of the measures are fMRI measures. 
+
+```{r acc vs constructs}
+
+# first, make sure we've got only subjects that have fMRI data 
+DFR_acc <- p200_data[p200_data$PTID %in% p200_indiv_ROI_DFR_delay$PTID,c(1,7:8)]
+DFR_acc$LE <- DFR_acc$XDFR_MRI_ACC_L3 - DFR_acc$XDFR_MRI_ACC_L1
+constructs_fMRI <- construct_vars_omnibus[construct_vars_omnibus$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]
+
+acc_constructs_corr <- corr.test(DFR_acc[,2:4],constructs_fMRI[,2:7])
+
+corrplot(acc_constructs_corr$r, addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r acc vs capacity}
+
+data_for_plot <- merge(DFR_acc, constructs_fMRI)
+
+ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = XDFR_MRI_ACC_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("Relationship between DFR L3 accuracy and omnibus WM span")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$omnibus_span_no_DFR_MRI)
+
+ggplot(data_for_plot, aes(y=XDFR_MRI_ACC_L1, x = omnibus_span_no_DFR_MRI))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("Relationship between DFR L1 accuracy and omnibus WM span")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L1,data_for_plot$omnibus_span_no_DFR_MRI)
+
+
+```
+
+Now, let's look overall at the the relationships between our constructs and the clinical variables. 
+
+```{r constucts to clin corr}
+
+constructs_clin_corr <- corr.test(construct_vars_omnibus[,2:7], p200_clinical_zscores[,2:13])
+
+rownames(constructs_clin_corr$r) <- c("Simple Span", "Complex Span", "GM/IC", "LTM", "Intelligence", "Omnibus Span")
+corrplot(constructs_clin_corr$r, addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+We're mostly theoretically interested in the relationship between omnibus span (our working memory capacity measure) and measures like WHODAS and BPRS, which get at general psychiatric dysfunction. Let's plot those specifically, just to look at the relationships at a little moe closely. 
+
+Both variables show a negative relationship, with lower levels of psychiatric distress at higher WM capacity. As we saw above, the relationship with BPRS Total is statistically significant at p < 0.01, but WHODAS is not.  
+
+```{r plot specific constucts/clinical relationships, warning=FALSE}
+
+data_for_plot <- merge(construct_vars_omnibus,p200_clinical_zscores)
+
+ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = WHO_ST_S32))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("Relationship between omnibus span and WHODAS")
+
+ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = BPRS_TOT))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("Relationship between omnibus span and BPRS -- Total")
+
+```
+
+# Behavioral to Load Effects 
+
+## DFR ROIs
+
+Now, we want to look at relationships between behavior and load effects. Not much to see here. 
+
+```{r constructs/load effects}
+
+constructs_load_effects <- cor_regress(construct_vars_omnibus[,1:7],p200_indiv_ROI_DFR_delay,scanner_cov)
+
+rownames(constructs_load_effects[["results"]]) <- c("Simple Span", "Complex Span", "GM/IC", "LTM", "Intelligence", "Omnibus Span")
+corrplot(as.matrix(constructs_load_effects[["results"]]), addCoef.col = "black", number.cex=0.5, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+For good measure, let's just look at some scatter plots. We're looking at 3 examples here - all the ROIs together, the L dlPFC and L IPS, regions that show particularly strong load effects and that also have theoretical implications with working memory. No wonder we didn't see any significant correlations - it looks like there's a non-linear relationship here. We should explore this more. 
+
+```{r scatter plots constructs to load effects}
+
+data_for_plot <- merge(p200_indiv_ROI_DFR_delay,constructs_fMRI)
+
+p1 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = DFR_ROIs))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+
+p4 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = DFR_L_preSMA))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1+p2)/(p3+p4)
+
+
+```
+
+```{r investigate residuals}
+
+data_for_plot <- merge(data_for_plot,p200_demographics)
+model <- lm(DFR_L_dlPFC ~ omnibus_span_no_DFR_MRI + SCANNER, data = data_for_plot)
+
+x = data.frame(resid = residuals(model), fitted = fitted(model))
+
+ggplot(data=x,aes(x=resid))+
+  geom_histogram(bins = 30)
+
+ggplot(data = x, aes(x=fitted,y=resid))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+```
+
+
+Now let's look at these same relationships with accuracy. Interestingly, these show a significant linear relationship, which is different than with capacity. 
+
+```{r load effects vs accuracy}
+
+cog_fMRI <- p200_cog_zscores[p200_cog_zscores$PTID %in% p200_indiv_ROI_DFR_delay$PTID,]
+
+data_for_plot <- merge(cog_fMRI,p200_indiv_ROI_DFR_delay)
+
+p1 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_ROIs))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=1,y=2.5,label="r=0.24**")
+
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_ROIs)
+
+p2 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=1,y=1,label="r=0.26***")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_dlPFC)
+
+
+p3 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=1,y=1,label="r=0.24**")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$DFR_L_IPS)
+
+p1 + p2 + p3
+
+```
+
+## HPC
+
+Only thing signficant linear relationship is accuracy @ L3 with R posterior HPC delay @ L3. 
+
+```{r HPC load effects vs accuracy}
+
+data_for_plot <- merge(cog_fMRI,p200_HPC_Ant)
+
+p1 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Anterior Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$R_DELAY_L3)
+
+p2 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Anterior Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$L_DELAY_L3)
+
+data_for_plot <- merge(cog_fMRI,p200_HPC_Med)
+
+p3 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Medial Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$R_DELAY_L3)
+
+p4 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Medial Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$L_DELAY_L3)
+
+data_for_plot <- merge(cog_fMRI,p200_HPC_Post)
+
+p5 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Posterior Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$R_DELAY_L3)
+
+p6 <- ggplot(data_for_plot, aes(x=XDFR_MRI_ACC_L3, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Posterior Delay L3")
+
+cor.test(data_for_plot$XDFR_MRI_ACC_L3,data_for_plot$L_DELAY_L3)
+
+(p1 + p3 + p5)/(p2 + p4 + p6)
+
+```
+
+No significant relatinonship between HPC activity and omnibus span. 
+
+```{r HPC load effects vs capacity}
+
+data_for_plot <- merge(constructs_fMRI,p200_HPC_Ant)
+
+p1 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Anterior Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$R_DELAY_L3)
+
+p2 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Anterior Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$L_DELAY_L3)
+
+data_for_plot <- merge(constructs_fMRI,p200_HPC_Med)
+
+p3 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Medial Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$R_DELAY_L3)
+
+p4 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Medial Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$L_DELAY_L3)
+
+data_for_plot <- merge(constructs_fMRI,p200_HPC_Post)
+
+p5 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = R_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("R HPC Posterior Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$R_DELAY_L3)
+
+p6 <- ggplot(data_for_plot, aes(x=omnibus_span_no_DFR_MRI, y = L_DELAY_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ggtitle("L HPC Posterior Delay L3")
+
+cor.test(data_for_plot$omnibus_span_no_DFR_MRI,data_for_plot$L_DELAY_L3)
+
+(p1 + p3 + p5)/(p2 + p4 + p6)
+
+
+```
+
+Nothing significant with clinical/load effects. 
+
+```{r clinical with load effects}
+
+clinical_load_corr <- cor_regress(p200_clinical_zscores,p200_indiv_ROI_DFR_delay,scanner_cov)
+
+corrplot(as.matrix(clinical_load_corr[["results"]]),addCoef.col = "black", number.cex=0.45, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+But, let's just look at some scatter plots, just in case it's a non-linear relationship like with capacity. Specifically, let's look at BPRS because it's the measure of global psychiatric dysfuntion that showed a relationship with capacity, and WHODAS, because it's another general measure. Neither of these show any relationship.  
+
+```{r scatter plots clinical to load effects}
+
+data_for_plot <- merge(p200_indiv_ROI_DFR_delay,p200_clinical_zscores)
+
+p1 <- ggplot(data_for_plot, aes(x=BPRS_TOT, y = DFR_ROIs))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot, aes(x=BPRS_TOT, y = DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot, aes(x=BPRS_TOT, y = DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot, aes(x=WHO_ST_S32, y = DFR_ROIs))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p5<- ggplot(data_for_plot, aes(x=WHO_ST_S32, y = DFR_L_dlPFC))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p6 <- ggplot(data_for_plot, aes(x=WHO_ST_S32, y = DFR_L_IPS))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 + p2 + p3)/(p4 + p5 + p6)
+
+```
+
+# Resting State Connectivity
+
+## Within/Across Regions
+
+This data is averaged over networks, and included global signal regression and detrending.
+
+```{r resting state to constructs}
+
+RS_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7],p200_RS, scanner_cov)
+corrplot(as.matrix(RS_to_constructs_corr[["results"]]), addCoef.col = "black", number.cex=0.45, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+Let's just investigate some of the more interesting ones - FPCN is theoretically related to WM, so let's look at those scatter plots to make sure there isn't a relationship like there is with load effects. 
+
+```{r scatter plots for RS/constructs}
+
+data_for_plot <- merge(construct_vars_omnibus,p200_RS)
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`FrontoParietal/Default`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.4,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,5],digits=2)))
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`FrontoParietal/Visual`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.25,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,10],digits=2)))
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`FrontoParietal/CinguloOperc`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.4,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,14],digits=2)))
+
+p4 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`FrontoParietal/DorsalAttn`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.4,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,17],digits=2)))
+
+p5 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`FrontoParietal/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.23,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,19],digits=2)))
+
+p6 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=`VentralAttn/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=0.5,y=0.35,label=paste("r =",round(RS_to_constructs_corr[["results"]][6,20],digits=2)))
+
+(p1+p2+p3)/(p4+p5+p6)+
+  plot_annotation(title = "FPCN connectivity with omnibus span")
+
+
+
+```
+
+
+```{r resting state to clinical}
+
+RS_to_clin_corr <- cor_regress(p200_clinical_zscores,p200_RS, scanner_cov)
+corrplot(as.matrix(RS_to_clin_corr[["results"]]), addCoef.col = "black", number.cex=0.3,method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r scatter plots for RS/clinical, warning=FALSE}
+
+data_for_plot <- merge(p200_clinical_zscores,p200_RS)
+p1 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`FrontoParietal/Default`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.3,label="r=-0.13")
+
+p2 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`FrontoParietal/Visual`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.2,label="r=0.06")
+
+p3 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`FrontoParietal/CinguloOperc`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.4,label="r=0.13")
+
+p4 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`FrontoParietal/DorsalAttn`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.35,label="r=0.02")
+
+p5 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`FrontoParietal/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.225,label="r=-0.06")
+
+p6 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=`VentralAttn/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=3,y=.35,label="r=0.04")
+
+(p1+p2+p3)/(p4+p5+p6)+
+  plot_annotation(title="FPCN/BPRS")
+
+p1 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`FrontoParietal/Default`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=2,y=.4,label="r=-0.02")
+
+p2 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`FrontoParietal/Visual`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=1.75,y=.25,label="r=0.07")
+
+p3 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`FrontoParietal/CinguloOperc`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=2,y=.4,label="r=0.10")
+
+p4 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`FrontoParietal/DorsalAttn`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=1.5,y=.35,label="r=-0.01")
+
+p5 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`FrontoParietal/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=2,y=.225,label="r=-0.07")
+
+p6 <- ggplot(data_for_plot,aes(x=WHO_ST_S32,y=`VentralAttn/FrontoParietal`))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  geom_text(x=2,y=.3,label="r=0.05")
+
+(p1+p2+p3)/(p4+p5+p6)+
+  plot_annotation(title="FPCN/WHODAS")
+
+
+
+```
+
+## BCT Measures
+
+```{r BCT to constructs}
+
+BCT_to_constructs_corr <- cor_regress(p200_BCT_forCorr,construct_vars_omnibus[,1:7], scanner_cov)
+corrplot(as.matrix(BCT_to_constructs_corr[["results"]]), addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r omnibus span vs BCT indiv plots}
+
+data_for_plot <- merge(p200_BCT_forCorr,construct_vars_omnibus)
+
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Participation_Coef_Mean))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Global_Eff))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Modularity_Louvain_N))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+p1+p2+p3+
+  plot_annotation(title = "Omnibus Span/BCT measures")
+
+
+
+```
+
+
+
+```{r BCT to clinical}
+
+BCT_to_clinical_corr <- cor_regress(p200_BCT_forCorr,p200_clinical_zscores, scanner_cov)
+corrplot(as.matrix(BCT_to_clinical_corr[["results"]]),addCoef.col = "black", number.cex=0.5, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+## Individual Network Participation Coefficients
+
+```{r indiv partic coef to constructs}
+
+indiv_partic_coeff_to_constructs_corr <- cor_regress(p200_indiv_network_ParticCoeff,construct_vars_omnibus[,1:7], scanner_cov)
+corrplot(as.matrix(indiv_partic_coeff_to_constructs_corr[["results"]]), addCoef.col = "black", number.cex=0.75,method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r plot indiv coeff vs constructs}
+
+data_for_plot <- merge(p200_indiv_network_ParticCoeff,construct_vars_omnibus)
+
+ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FrontoParietal))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+```
+
+```{r indiv partic coef to clinical}
+
+indiv_partic_coeff_to_clin_corr <- cor_regress(p200_indiv_network_ParticCoeff,p200_clinical_zscores, scanner_cov)
+corrplot(as.matrix(indiv_partic_coeff_to_clin_corr[["results"]]), addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r plot indiv coeff vs clin }
+
+data_for_plot <- merge(p200_indiv_network_ParticCoeff,p200_clinical_zscores)
+
+ggplot(data=data_for_plot,aes(x=BPRS_TOT,y=FrontoParietal))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+ggplot(data=data_for_plot,aes(x=WHO_ST_S32,y=FrontoParietal))+
+  geom_point()+
+  stat_smooth(method="lm")
+
+```
+
+# Beta Series Connectivity
+
+This analysis uses the entire p200 dataset (at least those that have useable fMRI data) but uses ROIs derived from the HCP n-back task instead of from our own data. 
+
+## Cue
+
+```{r beta series cue to constructs}
+
+BS_cue_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], p200_beta_conn_cue,scanner_cov)
+corrplot(as.matrix(BS_cue_to_constructs_corr[["results"]]),addCoef.col = "black", number.cex=0.5, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r beta series L3 cue/constructs scatter plots}
+
+data_for_plot <- merge(construct_vars_omnibus,p200_beta_conn_cue)
+
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FPCN_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_HPC_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=HPC_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity at high load during cue with Omnibus Span")
+
+
+```
+
+```{r beta series LE cue/constructs scatter plots}
+
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FPCN_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_HPC_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=HPC_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity Load Effects during cue with Omnibus Span")
+
+
+```
+
+```{r beta series cue to clinical}
+
+BS_cue_to_clinical_corr <- cor_regress(p200_clinical_zscores, p200_beta_conn_cue,scanner_cov)
+corrplot(as.matrix(BS_cue_to_clinical_corr[["results"]]), addCoef.col = "black", number.cex=0.5,method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r beta series L3 cue/clinical scatter plots}
+
+data_for_plot <- merge(p200_clinical_zscores,p200_beta_conn_cue)
+
+p1 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FPCN_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_HPC_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=HPC_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity at high load during cue with BPRS")
+
+
+```
+
+```{r beta series LE cue/clinical scatter plots}
+
+p1 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FPCN_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_HPC_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=HPC_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity Load Effects during cue with BPRS")
+
+
+```
+
+## Delay
+
+```{r beta series delay to constructs}
+
+BS_delay_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], p200_beta_conn_delay,scanner_cov)
+corrplot(as.matrix(BS_delay_to_constructs_corr[["results"]]), addCoef.col = "black", number.cex=0.5, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+
+```{r beta series L3 delay/constructs scatter plots}
+
+data_for_plot <- merge(construct_vars_omnibus,p200_beta_conn_delay)
+
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FPCN_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_HPC_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=HPC_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity at high load during Delay with Omnibus Span")
+
+
+```
+
+```{r beta series LE delay/constructs scatter plots}
+
+p1 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FPCN_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_HPC_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=FPCN_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=HPC_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity Load Effects during Delay with Omnibus Span")
+
+
+```
+
+```{r beta series delay to clinical}
+
+BS_delay_to_clinical_corr <- cor_regress(p200_clinical_zscores, p200_beta_conn_delay,scanner_cov)
+corrplot(as.matrix(BS_delay_to_clinical_corr[["results"]]), addCoef.col = "black", number.cex=0.5, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r beta series L3 delay/clinical scatter plots}
+
+data_for_plot <- merge(p200_clinical_zscores,p200_beta_conn_delay)
+
+p1 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FPCN_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_HPC_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=HPC_FFA_L3))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity at high load during delay with BPRS")
+
+
+```
+
+```{r beta series LE delay/clinical scatter plots}
+
+p1 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FPCN_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p2 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_HPC_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p3 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=FPCN_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+p4 <- ggplot(data_for_plot,aes(x=BPRS_TOT,y=HPC_FFA_LE))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+(p1 +p2)/(p3+p4)+
+  plot_annotation(title="Beta Series Connectivity Load Effects during delay with BPRS")
+
+
+```
+
+# Structural Connectivity
+
+```{r FA to constructs}
+
+FA_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], FA_Data,scanner_cov)
+corrplot(as.matrix(FA_to_constructs_corr[["results"]]), method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r FA to clinical}
+
+FA_to_clin_corr <- cor_regress(FA_Data,p200_clinical_zscores, scanner_cov)
+corrplot(as.matrix(FA_to_clin_corr[["results"]]),method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+# Cortical Thickness
+
+```{r cortical thickness DFR to constructs}
+
+cortical_DFR_thick_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], p200_DFR_fullMask_cortical_thickness,scanner_cov)
+corrplot(as.matrix(cortical_DFR_thick_to_constructs_corr[["results"]]),addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r plot cortical thickness vs omnibus span}
+
+data_for_plot <- merge(constructs_fMRI,p200_DFR_fullMask_cortical_thickness)
+
+cue_RH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Cue_RH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+cue_LH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Cue_LH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+delay_RH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Delay_RH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+delay_LH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Delay_LH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+probe_RH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Probe_RH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+probe_LH <- ggplot(data=data_for_plot,aes(x=omnibus_span_no_DFR_MRI,y=Probe_LH))+
+  geom_point()+
+  stat_smooth(method="loess")
+
+
+(cue_RH + delay_RH + probe_RH) / (cue_LH + delay_LH + probe_LH)+ 
+  plot_annotation(title="cortical thickness from DFR delay period clusters vs omnibus span")
+
+
+```
+
+
+```{r cortical thickness DFR to clinical}
+
+
+cortical_DFR_thick_to_clinical_corr <- cor_regress(p200_DFR_fullMask_cortical_thickness,p200_clinical_zscores, scanner_cov)
+corrplot(as.matrix(cortical_DFR_thick_to_clinical_corr[["results"]]),addCoef.col = "black", number.cex=0.75, method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r cortical thickness FS LH to constructs}
+
+cortical_thick_LH_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], aparc_LH_MTHICK,scanner_cov)
+corrplot(as.matrix(cortical_thick_LH_to_constructs_corr[["results"]]), method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r cortical thickness FS LH to clinical}
+
+cortical_thick_LH_to_clinical_corr <- cor_regress(p200_clinical_zscores, aparc_LH_MTHICK,scanner_cov)
+corrplot(as.matrix(cortical_thick_LH_to_clinical_corr[["results"]]), method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+```{r cortical thickness FS RH to constructs}
+
+cortical_thick_RH_to_constructs_corr <- cor_regress(construct_vars_omnibus[,1:7], aparc_RH_MTHICK,scanner_cov)
+corrplot(as.matrix(cortical_thick_RH_to_constructs_corr[["results"]]), method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+
+```
+
+```{r cortical thickness FS RH to clinical}
+
+cortical_thick_RH_to_clinical_corr <- cor_regress(p200_clinical_zscores, aparc_RH_MTHICK,scanner_cov)
+corrplot(as.matrix(cortical_thick_RH_to_clinical_corr[["results"]]), method="color", tl.col = "black", tl.cex = 1, col = col, sig.level = 0.05)
+
+```
+
+
