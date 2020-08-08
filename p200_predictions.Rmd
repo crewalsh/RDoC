@@ -18,9 +18,9 @@ To do so, we extracted data from TR 6 for the encoding period and TR 8 for the d
 
 In addition to the univariate load effects, we have also seen a relationship with various measures reflecting multivariate representation across and within trial, including the probability of a MVPA classifer predicting a face at any given point in a trial and the similarity of multivariate representations across and within trials. Both of these measures were taken at each individual trial and averaged, in addition to taken from the average over many trials (which served as a template for the canonical trial type). We added these multivariate measures to see if they improved model performance when added to regression models that only contained variables based on univariate load effects.  
 
-Overll, we saw some cross-over in which measures predicted each behavioral variable. Principal components related to encoding-delay in the PFC regions and similarity within TR in low load correct trials in DFR/individual to template across TR in high load correct in fusiform were related to both span and accuracy at high load, while univariate effects in right hemisphere parietal regions in during delay and the encoding + (encoding-delay) measure related to BPRS and accuracy. 
+Overall, we were best able to explain variance in high load accuracy, with our best model able to explain 40% of the variance. In contrast, we were only able to explain 12% of the variance in span, and 7% of the variance in BPRS scores. 
 
-In contrast, delay load effect and similarity within TR in low load correct trials in DFR, individual to template across TR in high load correct in fusiform were only related to span; similarity of correct trials (regardless of load) in fusiform, face representation during delay and probe in mostly indiv trials in the fusiform, high incorrect and low correct in fusiform across individual trial were related to BPRS and fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR,  how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform, face representation in DFR encoding and delay for mostly indiv trials and representation during low correct and high incorrect in fusiform averages from template related uniquely to accuracy. 
+The individual components related to each of these measures will be discussed further below, but one interesting thing to note is that there is largely not much overlap. The first PC of the similarity measures (which mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform), was important for predicting both span and accuracy, while the encoding - delay difference in parietal regions was important in both accuracy and BPRS scores. There was no overlap between components implicated in span and BPRS. 
 
 ```{r load libraries and data}
 
@@ -525,214 +525,21 @@ fviz_pca_var(res_MVPA.pca,
 
 ```
 
+Now that we have our PCs to reduce overlapping variance, we can use these in a series of regressions to predict span, BPRS and accuracy at high load. We will use a number of different methods to select features: stepwise regression, ridge regression, LASSO regression and ElasticNet regression. A brief description of the methods are as follows: 
+
+**Stepwise Regression:** Initially takes all parameters and sequentially removes parameters to minimize the AIC of the model overall. At each step, it calculates what the AIC would be if it removed each individual parameter and then removes the one that makes the most difference. Stops when model converges at a minimal AIC. 
+
+**Ridge Regression:** A type of penalized linear regression (uses L2 norm - minimizes the sum of the squared coefficients). Shrinks the values of unimportant coefficients close to zero, but does not remove them. 
+
+**LASSO Regression:** Another type of penalized linear regression (uses L1 norm - minimizes the sum of the absolute value of the coefficients). Forces coefficients that are unimportant to the model to be zero, creating a sparse model. 
+
+**ElasticNet Regression:** Uses both L1- and L2-norm penalties with regression, so shrinks some coefficients close to zero and some to exactly zero. 
+
 # Predicting Span
 
-Now that we've got our PCs, we're going to use them to try to predict span. 
+## Prep data
 
-## Only Univariate
-
-It seems like it's actually just including both the encoding and the delay that relates to span, because it's the first PC that relates. 
-
-```{r try regression of univariate on span}
-
-data_reg_span <- data.frame(span = data_for_reg$span, PC1 = res.pca[["x"]][,1], PC2 = res.pca[["x"]][,2],PC3 = res.pca[["x"]][,3] )
-span_univ.lm <- lm(span ~ .,data=data_reg_span)
-summary(span_univ.lm)
-step_univ_span <- stepAIC(span_univ.lm)
-summary(step_univ_span)
-
-
-```
-
-## Add similarity
-
-We can add in similarity measures and they have a significant relation with span. 
-
-```{r add in sim PCA to regression}
-
-data_reg3 <- data.frame(data_reg_span[,1:4],res_sim.pca[["x"]][,1:5])
-colnames(data_reg3)[2:4] <-  paste(colnames(data_reg3)[2:4],"_univariate", sep="")
-colnames(data_reg3)[5:9] <- paste(colnames(data_reg3)[5:9],"_similarity", sep="")
-
-univariate_similarity_pca.lm <- lm(span ~ ., data = data_reg3)
-summary(univariate_similarity_pca.lm)
-
-step_model_univ_sim <- stepAIC(univariate_similarity_pca.lm)
-summary(step_model_univ_sim)
-
-```
-
-However, adding in similarity does not necessarily create a better model predicting span. 
-
-```{r statistically compare models -- span}
-
-anova(step_univ_span,step_model_univ_sim)
-
-
-```
-
-## Add MVPA
-
-Let's see if adding in MVPA makes it better. It does not. 
-
-```{r add MVPA to univ - span}
-
-data_reg4 <- data.frame(data_reg_span[,1:4],res_MVPA.pca[["x"]][,1:12])
-colnames(data_reg4)[2:4] <-  paste(colnames(data_reg4)[2:4],"_univariate", sep="")
-colnames(data_reg4)[5:12] <- paste(colnames(data_reg4)[5:12],"_MVPA", sep="")
-
-univariate_MVPA_pca.lm <- lm(span ~ ., data = data_reg4)
-summary(univariate_MVPA_pca.lm)
-
-step_model_univ_MPVA <- stepAIC(univariate_MVPA_pca.lm)
-summary(step_model_univ_MPVA)
-
-```
-
-# Predicting BPRS 
-
-## Only Univariate 
-
-The univariate data does not predict BPRS. 
-
-```{r bprs with just univariate}
-
-data_reg5 <- data.frame(BPRS = data_for_reg$BPRS,PC1_univ = res.pca[["x"]][,1], PC2_univ = res.pca[["x"]][,2], 
-                        PC3_univ=res.pca[["x"]][,3])
-
-full_BPRS_univ.lm <- lm(BPRS ~ ., data=data_reg5)
-summary(full_BPRS_univ.lm)
-step_BPRS_univ <- stepAIC(full_BPRS_univ.lm)
-summary(step_BPRS_univ)
-
-
-```
-
-## Only Similarity
-
-Now, let's try with similarity. These are able to predict BPRS! We're focusing on PC2 (similarity within TR in low load correct trials in DFR, individual to template across TR in high load correct in fusiform), with PCs 1 (mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform) and 5 (mostly related to correct trials (regardless of load) in fusiform) trending towards significance. 
-
-```{r BPRS with similarity}
-
-data_reg6 <- data.frame(BPRS = data_for_reg$BPRS,  PC3_univ=res.pca[["x"]][,3], res_sim.pca[["x"]][,1:5]) 
-
-full_sim_BPRS.lm <- lm(BPRS ~.,data=data_reg6)
-summary(full_sim_BPRS.lm)
-step_sim_BPRS.lm <- stepAIC(full_sim_BPRS.lm)
-summary(step_sim_BPRS.lm)
-
-```
-
-Statistically comparing shows that we do indeed see an improvement in the model when we include the similarity measures. 
-
-```{r statistically compare models- BPRS}
-
-anova(step_BPRS_univ,step_sim_BPRS.lm)
-
-```
-
-## Add MVPA
-
-Now, let's add the MVPA PCs in. 
-
-```{r}
-
-data_reg7 <- data.frame(BPRS = data_for_reg$BPRS,  PC3_univ=res.pca[["x"]][,3], PC1_sim=res_sim.pca[["x"]][,1], PC5_sim=res_sim.pca[["x"]][,5], res_MVPA.pca[["x"]][,1:12])
-colnames(data_reg7)[5:16] <- paste(colnames(data_reg7)[5:16],"_MVPA", sep="")
-
-full_sim_MVPA_BPRS.lm <- lm(BPRS ~.,data=data_reg7)
-summary(full_sim_MVPA_BPRS.lm)
-step_sim_MVPA_BPRS.lm <- stepAIC(full_sim_MVPA_BPRS.lm)
-summary(step_sim_MVPA_BPRS.lm)
-
-
-```
-
-Adding in MVPA, we see that there is a sigificant relationship between BPRS and PC4 (fusiform delay and probe, mostly indiv trials), and a trending one with PC7 (high incorrect and low correct in fusiform across trial, mostly in individual trials). Now, let's see if the model is actually better. We can't run an ANOVA, but including the MVPA variables increases the adjusted R^2 value. 
-
-```{r compare anova models - BPRS with MVPA}
-
-anova(step_sim_BPRS.lm,step_sim_MVPA_BPRS.lm)
-
-```
-
-# Predicting Accuracy 
-
-Finally, lets try to predict accuracy, and see if adding in similarity adds to that analysis. 
-
-## Only univariate
-
-It's the first PC (load effect at encoding/encoding+encoding-delay) and second PC (load effect at delay) that predicts accuracy, though the encoding - delay does trend. 
-
-```{r acc with just univariate}
-
-data_reg8 <- data.frame(high_acc = data_for_reg$high_acc,PC1_univ = res.pca[["x"]][,1], PC2_univ = res.pca[["x"]][,2], PC3_univ = res.pca[["x"]][,3])
-
-full_acc_univ.lm <- lm(high_acc ~ ., data=data_reg8 )
-summary(full_acc_univ.lm)
-step_acc_univ <- stepAIC(full_acc_univ.lm)
-summary(step_acc_univ)
-
-```
-
-## Add similarity
-
-When we add in similarity PCs, we see that similarity PC1 (mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform), 3 (fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR) and 4 (how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform) have a significant relationships with accuracy. We see that PCs 2 (delay load effect) and 3 (encoding - delay) from the univariate analysis 
-
-```{r add in similarity for acc }
-
-data_reg9 <- data.frame(high_acc = data_for_reg$high_acc,PC1_univ = res.pca[["x"]][,1], PC2_univ = res.pca[["x"]][,2], PC3_univ = res.pca[["x"]][,3], res_sim.pca[["x"]][,1:5])
-
-full_acc_univ_sim.lm <- lm(high_acc ~ ., data=data_reg9)
-summary(full_acc_univ_sim.lm)
-step_acc_univ_sim <- stepAIC(full_acc_univ_sim.lm)
-summary(step_acc_univ_sim)
-
-```
-
-When we formally compare models, we can see that adding in the principal components for similarity do indeed improve the model. 
-
-```{r statistically compare models -accuracy}
-
-anova(step_acc_univ,step_acc_univ_sim)
-
-```
-
-## Add MVPA
-
-Now, let's add the MVPA principal components. 
-
-```{r add MVPA to acc} 
-
-data_reg10 <- data.frame(high_acc = data_for_reg$high_acc,PC1_univ = res.pca[["x"]][,1], PC2_univ = res.pca[["x"]][,2], PC3_univ = res.pca[["x"]][,3],PC2_sim=res_sim.pca[["x"]][,2], PC3_sim=res_sim.pca[["x"]][,3], PC4_sim=res_sim.pca[["x"]][,4], res_MVPA.pca[["x"]][,1:12])
-colnames(data_reg10)[8:19] <- paste(colnames(data_reg10)[8:19],"_MVPA", sep="")
-
-full_acc_univ_sim_MVPA.lm <- lm(high_acc ~ ., data=data_reg10)
-summary(full_acc_univ_sim_MVPA.lm)
-step_acc_univ_sim_MVPA <- stepAIC(full_acc_univ_sim_MVPA.lm)
-summary(step_acc_univ_sim_MVPA)
-
-```
-
-We see that MVPA PCs 2 (DFR encoding and delay for mostly indiv trials) and 10 (low correct and high incorrect in fusiform averages from template) have significant relationships, with PC4 (fusiform delay and probe, mostly indiv trials) and 11 (all trial types, mostly geared towards DFR (regardless of individual or template) during probe and delay) have trending relationships. The algorithm still included PC8, which doesn't have a significant relationship, so let's remove this and then compare models. 
-
-We saw that PC 4 also had a relationship with BPRS. 
-
-Adding in the MVPA data does provide a significant increase in explained variance! 
-
-```{r compare models for acc with and without MVPA}
-
-acc_univ_sim_MVPA.lm <- lm(high_acc ~ PC1_univ + PC3_univ+PC2_sim+PC3_sim+PC4_sim+PC2_MVPA+PC4_MVPA+PC10_MVPA+PC11_MVPA, data = data_reg10)
-
-anova(acc_univ_sim_MVPA.lm,step_acc_univ_sim)
-
-```
-
-# Regularized Regression 
-
-## Span
-
-```{r prep data - predict span}
+```{r create data df}
 reg_data <- data.frame(span = data_for_reg$span, 
                        high_acc = data_for_reg$high_acc,
                        BPRS = data_for_reg$BPRS,
@@ -747,23 +554,31 @@ colnames(reg_data)[12:23] <- paste("PC",c(1:12),"_MVPA",sep="")
 set.seed(123)
 ```
 
-
 ```{r prep data - predict span}
 training.samples_span <- reg_data$span %>%
   createDataPartition(p = 0.8, list = FALSE)
 train.data_span  <- reg_data[training.samples_span, c(1, 4:23)]
 test.data_span <- reg_data[-training.samples_span, c(1, 4:23)]
 
-
-# Predictor variables
-x.span <- model.matrix(span~., train.data_span)[,-1]
-# Outcome variable
-y.span <- train.data_span$span
+# standardize, because that is important for ridge regression 
+train.data_span <- sapply(train.data_span, scale)
+test.data_span <- sapply(test.data_span, scale)
+test.data_span <- data.frame(test.data_span)
 
 lambda <- 10^seq(-3, 3, length = 100)
 
 
 ```
+
+## Stepwise Regression 
+
+While the final stepwise model is significant overall, we see significant effects of: 
+
++ __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions. This value is negative, suggesting that stronger load effects is related to lower span
++ __PC2_univ:__ delay load effect. This term is also negative, again suggesting stronger load effect is related to lower span
++ __PC1_sim:__ mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform. This term is negative
++ __PC2_univ:__ similarity within TR in low load correct trials in DFR, individual to template across TR in high load correct in fusiform. This term is positive, suggesting that higher similarity means higher span 
+
 
 ```{r stepwise - span}
 
@@ -780,7 +595,17 @@ step.span$finalModel
 summary(step.span$finalModel)
 
 ```
+## Ridge Regression 
 
+The most important PCs for the Ridge regression predicting span are: 
+
++ __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions. This value is negative, suggesting that stronger load effects is related to lower span
++ __PC1_sim:__ mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform (which we saw in the stepwise model)
++ __PC3_MVPA:__ DFR encoding and probe (mostly averages from template)
++ __PC5_MVPA:__ fusiform, averages from template, all trial types, mostly delay and encoding
++ __PC7_MVPA:__ high incorrect and low correct in fusiform across trial, mostly in individual trials
++ __PC10_MVPA:__ low correct and high incorrect in fusiform averages from template
++ __PC11_MVPA:__ all trial types, mostly geared towards DFR (regardless of individual or template) during probe and delay
 
 ```{r ridge - span}
 
@@ -801,6 +626,10 @@ data.frame(
 
 ```
 
+## LASSO Regression
+
+In the LASSO regression, we see that only PC1 from the univariate information and PC1 from the similarity measures are kept. 
+
 ```{r lasso - span}
 
 lasso.span <- train(
@@ -820,6 +649,10 @@ data.frame(
 
 ```
 
+## ElasticNet
+
+Same with ElasticNet
+
 ```{r elastic net - span}
 
 elastic.span <- train(
@@ -837,6 +670,11 @@ data.frame(
   Rsquare = R2(predictions.elastic.span, test.data_span$span)
 )
 ```
+
+## Compare Models
+
+When comparing models, ElasticNet seems to be our best model - it explains ~12% of variance in span, and has the lowest median RMSE. 
+
 ```{r compare models - span}
 
 models.span <- list(ridge = ridge.span, lasso = lasso.span, elastic = elastic.span, stepwise = step.span)
@@ -846,7 +684,9 @@ resamples(models.span) %>% summary( metric = "Rsquared")
 
 ```
 
-## BPRS
+# Predicting BPRS
+
+## Prep data
 
 ```{r prep data - predict BPRS}
 
@@ -857,16 +697,25 @@ training.samples_BPRS <- reg_data$BPRS %>%
 train.data_BPRS  <- reg_data[training.samples_BPRS, c(3, 4:23)]
 test.data_BPRS <- reg_data[-training.samples_BPRS, c(3, 4:23)]
 
-
-# Predictor variables
-x.BPRS <- model.matrix(BPRS~., train.data_BPRS)[,-1]
-# Outcome variable
-y.BPRS <- train.data_BPRS$BPRS
+# standardize, because that is important for ridge regression 
+train.data_BPRS <- sapply(train.data_BPRS, scale)
+test.data_BPRS <- sapply(test.data_BPRS, scale)
+test.data_BPRS <- data.frame(test.data_BPRS)
 
 lambda <- 10^seq(-3, 3, length = 100)
 
 
 ```
+
+## Stepwise regression
+
+To predict BPRS, we see the PCs that contain important information are: 
+
++ __PC3_univ:__ encoding - delay in parietal regions
++ __PC2_sim:__ similarity within TR in low load correct trials in DFR, individual to template across TR in high load correct in fusiform
++ __PC5_sim:__ mostly related to correct trials (regardless of load) in fusiform. This is the only term here that shows a negative relationship, such that lower similarity relates to higher BPRS scores. 
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials
++ __PC7_MVPA:__ high incorrect and low correct in fusiform across trial, mostly in individual trials
 
 ```{r stepwise - BPRS}
 
@@ -883,6 +732,15 @@ step.BPRS$finalModel
 summary(step.BPRS$finalModel)
 
 ```
+
+## Ridge Regression
+
+Ridge regression gives us the following important PCs (similar to above) : 
+
++ __PC3_sim:__ fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR - term is negative
++ __PC5_sim:__ mostly related to correct trials (regardless of load) in fusiform. This is the only term here that shows a negative relationship, such that lower similarity relates to higher BPRS scores.
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials
++ __PC7_MVPA:__ high incorrect and low correct in fusiform across trial, mostly in individual trials
 
 ```{r ridge - BPRS}
 
@@ -901,6 +759,17 @@ data.frame(
   Rsquare = R2(predictions.ridge.BPRS, test.data_BPRS$BPRS)
 )
 ```
+
+## LASSO Regression
+
+LASSO gives us almost a combination of the above analyses: 
+
++ __PC3_univ:__ encoding - delay in parietal regions
++ __PC3_sim:__ fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR - term is negative
++ __PC5_sim:__ mostly related to correct trials (regardless of load) in fusiform. This is the only term here that shows a negative relationship, such that lower similarity relates to higher BPRS scores. 
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials
++ __PC7_MVPA:__ high incorrect and low correct in fusiform across trial, mostly in individual trials
++ __PC9_MVPA:__ incorrect high load trials across region, mostly in probe and encoding
 
 ```{r lasso - BPRS}
 
@@ -921,6 +790,19 @@ data.frame(
 
 ```
 
+## ElasticNet
+
+ElasticNet ends up mostly the same as LASSO, but adds in one additional parameter. 
+
++ __PC3_univ:__ encoding - delay in parietal regions
++ __PC2_sim:__ similarity within TR in low load correct trials in DFR, individual to template across TR in high load correct in fusiform
++ __PC3_sim:__ fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR - term is negative
++ __PC4_sim:__ how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform
++ __PC5_sim:__ mostly related to correct trials (regardless of load) in fusiform. This is the only term here that shows a negative relationship, such that lower similarity relates to higher BPRS scores. 
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials
++ __PC7_MVPA:__ high incorrect and low correct in fusiform across trial, mostly in individual trials
++ __PC9_MVPA:__ incorrect high load trials across region, mostly in probe and encoding
+
 ```{r elastic net - BPRS}
 
 elastic.BPRS <- train(
@@ -938,6 +820,11 @@ data.frame(
   Rsquare = R2(predictions.elastic.BPRS, test.data_BPRS$BPRS)
 )
 ```
+
+## Compare Models
+
+These models can explain less variance than in span - only about 3-7%. It seems as though LASSO is doing the best, with the 2nd highest explained variance but the lowest RMSE. 
+
 ```{r compare models - BPRS}
 
 models.BPRS <- list(ridge = ridge.BPRS, lasso = lasso.BPRS, elastic = elastic.BPRS, stepwise = step.BPRS)
@@ -948,7 +835,9 @@ resamples(models.BPRS) %>% summary( metric = "Rsquared")
 
 ```
 
-## L3 Accuracy
+# Predicting Accuracy 
+
+## Prep data
 
 ```{r prep data - predict high_acc}
 
@@ -959,16 +848,26 @@ training.samples_high_acc <- reg_data$high_acc %>%
 train.data_high_acc  <- reg_data[training.samples_high_acc, c(2, 4:23)]
 test.data_high_acc <- reg_data[-training.samples_high_acc, c(2, 4:23)]
 
-
-# Predictor variables
-x.high_acc <- model.matrix(high_acc~., train.data_high_acc)[,-1]
-# Outcome variable
-y.high_acc <- train.data_high_acc$high_acc
+train.data_high_acc <- sapply(train.data_high_acc, scale)
+test.data_high_acc <- sapply(test.data_high_acc, scale)
+test.data_high_acc <- data.frame(test.data_high_acc)
 
 lambda <- 10^seq(-3, 3, length = 100)
 
 
 ```
+
+## Stepwise regression
+
++ __PC3_univ:__ encoding - delay in parietal regions
++ __PC1_sim:__ mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform. This term is negative
++ __PC3_sim:__ fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR 
++ __PC4_sim:__ how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform - term is negative
++ __PC2_MVPA:__ DFR encoding and delay for mostly indiv trials - term is negative
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials  - term is negative
++ __PC10_MVPA:__ low correct and high incorrect in fusiform averages from template - term is negative
++ __PC11_MVPA:__ all trial types, mostly geared towards DFR (regardless of individual or template) during probe and delay - term is negative
+
 
 ```{r stepwise - high acc}
 
@@ -985,6 +884,10 @@ step.high_acc$finalModel
 summary(step.high_acc$finalModel)
 
 ```
+
+## Ridge regression
+
+In this one, it's hard to interpret since all of the coefficients have more or less the same magnitude. 
 
 ```{r ridge - high_acc}
 
@@ -1003,6 +906,22 @@ data.frame(
   Rsquare = R2(predictions.ridge.high_acc, test.data_high_acc$high_acc)
 )
 ```
+
+## LASSO Regression
+
++ __PC2_univ:__ delay load effect. This term is also negative, again suggesting stronger load effect is related to lower span. Term is negative
++ __PC1_sim:__ mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform. This term is negative
++ __PC3_sim:__ fusiform similarity during encoding (regardless of accuracy), delay similarity in DFR 
++ __PC4_sim:__ how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform - term is negative
++ __PC5_sim:__ mostly related to correct trials (regardless of load) in fusiform
++ __PC2_MVPA:__ DFR encoding and delay for mostly indiv trials 
++ __PC3_MVPA:__ DFR encoding and probe (mostly averages from template) - term is negative
++ __PC4_MVPA:__ fusiform delay and probe, mostly indiv trials  - term is negative
++ __PC6_MVPA:__ template averages for high load trials
++ __PC8_MVPA:__ low correct trials, particularly for DFR
++ __PC9_MVPA:__ incorrect high load trials across region, mostly in probe and encoding
++ __PC10_MVPA:__ low correct and high incorrect in fusiform averages from template - term is negative
++ __PC11_MVPA:__ all trial types, mostly geared towards DFR (regardless of individual or template) during probe and delay - term is negative
 
 ```{r lasso - high_acc}
 
@@ -1023,6 +942,15 @@ data.frame(
 
 ```
 
+## Elastic Net
+
+When we look at ElasticNet, all coefficients play a role. The most important ones seem to be: 
+
++ __PC3_univ:__ encoding - delay in parietal regions
++ __PC1_sim:__ mostly related to within TR high load correct trials (regardless of area) and across TR similarity at high load in the fusiform. This term is negative
++ __PC4_sim:__ how similar high load incorrect trials are to the template correct trials and low load correct trials in fusiform - term is negative
+
+
 ```{r elastic net - high_acc}
 
 elastic.high_acc <- train(
@@ -1040,6 +968,11 @@ data.frame(
   Rsquare = R2(predictions.elastic.high_acc, test.data_high_acc$high_acc)
 )
 ```
+
+## Compare models
+
+These models explain much more variance than either span or BPRS - on the level of 25-40% of the variance. ElasticNet drastically outperforms the other methods, with 40% variance explained and the second lowest RMSE. 
+
 ```{r compare models - high_acc}
 
 models.high_acc <- list(ridge = ridge.high_acc, lasso = lasso.high_acc, elastic = elastic.high_acc, stepwise = step.high_acc)
