@@ -69,6 +69,7 @@ library(psych)
 library(patchwork)
 library(rmatio)
 library(reshape2)
+library(kableExtra)
 
 load("data/behav.RData")
 load("data/load_effects_DFR.RData")
@@ -87,6 +88,7 @@ source("helper_fxns/prep_split_for_bar_plots.R")
 source("helper_fxns/average_electrodes.R")
 source("helper_fxns/average_electrodes_spectrum.R")
 source("helper_fxns/plot_tertiles.R")
+source("helper_fxns/find_inverted_U_spectra.R")
 
 ```
 
@@ -781,7 +783,6 @@ DFR_fMRI_LE_corr <- list(
 
 ```{r plot average spectra load effects}
 
-
 avg_ERSPS_midOccip_DFR <- mutate_for_heatmap(apply(ERSPS_midOccip_DFR[["data"]][["load_effect"]],c(1,2),mean))
 avg_ERSPS_Oz_DFR <- mutate_for_heatmap(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]],c(1,2),mean))
 avg_ERSPS_Favg_DFR <- mutate_for_heatmap(apply(ERSPS_Favg_DFR[["data"]][["load_effect"]],c(1,2),mean))
@@ -923,6 +924,72 @@ split_ERSPS_Favg_DFR_plots[["low"]]
 
 
 ```
+
+## Inverted U shape relationships 
+
+Taking the linear correlation would obscure any inverted U shaped relationships - so let's directly look for them by taking the values where med > low and med > high. 
+
+```{r find inverted U shape relationships in spectra data}
+
+inverted_U_midOccip_ERSPS <- find_inverted_U_spectra(split_ERSPS_midOccip_DFR, apply(ERSPS_midOccip_DFR[["data"]][["load_effect"]],c(1,2),mean))
+inverted_U_Oz_ERSPS <- find_inverted_U_spectra(split_ERSPS_Oz_DFR, apply(ERSPS_Oz_DFR[["data"]][["load_effect"]],c(1,2),mean))
+inverted_U_Favg_ERSPS <- find_inverted_U_spectra(split_ERSPS_Favg_DFR, apply(ERSPS_Favg_DFR[["data"]][["load_effect"]],c(1,2),mean))
+
+```
+
+What we end up seeing is across all electrodes, there is a U shaped relationship during the probe period across all frequency bands, one in the Oz electrode towards the middle to end of delay in the alpha and beta bands and across the task in the low gamma band. We also see a U shaped relationship during the entire encoding period in the Favg electrodes. 
+
+```{r plot inverted U shape relationships}
+
+
+ggplot(data=inverted_U_midOccip_ERSPS, aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("Inverted U relationship with WMC in midOccip cluster during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Power Load Effect")+
+  theme_classic() 
+
+ggplot(data=inverted_U_Oz_ERSPS, aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("Inverted U relationship with WMC in Oz during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Power Load Effect")+
+  theme_classic() 
+
+ggplot(data=inverted_U_Favg_ERSPS, aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("Inverted U relationship with WMC in Favg during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Power Load Effect")+
+  theme_classic() 
+
+
+```
+
 
 ## Correlation to Omnibus Span
 
@@ -4312,7 +4379,7 @@ Left FFA delay:
 + load effect alpha during cue at mid occipital 
 + low load beta during cue at F 
 
-```{r print DFR fMRI LE vs ERSP}
+```{r print FFA fMRI LE vs ERSP}
 
 for (ERSP in seq.int(25,60)){
   print(ggplot(data = ERSP_fMRI, aes_string(x="R_DELAY_LE", y = colnames(ERSP_fMRI)[ERSP]))+
