@@ -86,7 +86,7 @@ source("helper_fxns/split_into_groups.R")
 source("helper_fxns/prep_split_for_bar_plots.R")
 source("helper_fxns/average_electrodes.R")
 source("helper_fxns/average_electrodes_spectrum.R")
-
+source("helper_fxns/plot_tertiles.R")
 
 ```
 
@@ -4091,6 +4091,8 @@ ERSP_measures <- merge(ERSP_measures_alpha, ERSP_measures_beta, by= "PTID")
 
 ```
 
+## ERPs
+
 ```{r make ERP/fMRI plots}
 
 ERP_fMRI_plots <- list()
@@ -4098,7 +4100,8 @@ ERP_fMRI_plots <- list()
 ERP_fMRI <- merge(fMRI_measures, ERP_measures, by= "PTID")
 sig_linear_ERP_fMRI <- list()
 
-cumulative_df_ERP <- data.frame(matrix(nrow=1,ncol=2))
+cumulative_df_ERP <- data.frame(matrix(nrow=1,ncol=4))
+colnames(cumulative_df_ERP) <- c("ERP_measure", "fMRI_measure", "corr", "p_val")
 
 plot_count <- 1
 sig_plot_count <- 1
@@ -4114,7 +4117,7 @@ for (ERP in seq.int(25,36)){
     if (cor_results$p.value < 0.05){
       sig_linear_ERP_fMRI[[sig_plot_count]] <- ERP_fMRI_plots[[plot_count]]
       sig_plot_count <- sig_plot_count +1 
-      cumulative_df_ERP <- rbind(cumulative_df_ERP, c(colnames(ERP_fMRI)[ERP], colnames(ERP_fMRI)[fMRI]))
+      cumulative_df_ERP <- rbind(cumulative_df_ERP, c(colnames(ERP_fMRI)[ERP], colnames(ERP_fMRI)[fMRI], cor_results$estimate, cor_results$p.value))
     } 
     plot_count <- plot_count+1
   }
@@ -4122,6 +4125,33 @@ for (ERP in seq.int(25,36)){
 
 
 ```
+
+### Linear relationships 
+
+If we look for linear correlations, we see them across activity and load effect in the FFA during cue and delay period with the cue period N170 component in the mid occipital component and the cue and (mostly) probe P3 component. 
+
+```{r print significant linear relationships between ERPs/fMRI}
+
+cumulative_df_ERP <- cumulative_df_ERP[2:nrow(cumulative_df_ERP),]
+
+cumulative_df_ERP %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) 
+
+for (idx in seq.int(1,length(sig_linear_ERP_fMRI))){
+  print(sig_linear_ERP_fMRI[[idx]])
+}
+
+```
+
+
+### DFR delay vs ERP
+
+In the fMRI data, we only saw non linear relationships between fMRI measures and behavioral measures during the delay period, so we're going to focus there. 
+
+We see non-linear relationships between ERP and DFR delay period activity with both high and low load mid occipital n170 component during the cue period and during high load probe trials. We also see non-linear relationships with the probe P3 component at both high and low loads. 
+
+Interestingly, these are the same components that show a significant linear correlation with FFA activity. 
 
 ```{r print DFR fMRI LE vs ERP}
 
@@ -4133,16 +4163,48 @@ for (ERP in seq.int(25,36)){
           theme(aspect.ratio=1)
   ) 
 }
+
 ```
 
-```{r print significant linear relationships between ERPs/fMRI}
+However, if we look at the tertiles, all of these relationships look to be more linear overall than U shaped. 
 
-for (idx in seq.int(1,length(sig_linear_ERP_fMRI))){
-  print(sig_linear_ERP_fMRI[[idx]])
+```{r plot tertiles DFR vs ERP}
+
+plot_tertiles(ERP_fMRI %>% select(c("DFR_Load3_Load1", "low_load_cue_midOccip_n170")))
+plot_tertiles(ERP_fMRI %>% select(c("DFR_Load3_Load1", "high_load_cue_midOccip_n170")))
+plot_tertiles(ERP_fMRI %>% select(c("DFR_Load3_Load1", "high_load_probe_midOccip_n170")))
+plot_tertiles(ERP_fMRI %>% select(c("DFR_Load3_Load1", "high_load_probe_P3")))
+plot_tertiles(ERP_fMRI %>% select(c("DFR_Load3_Load1", "low_load_probe_P3")))
+
+
+```
+
+### FFA delay period vs ERP
+
+There are not any non-linear relationships between ERP measures and the FFA activity or load effects, which isn't super surprising, given we didn't really see non-linear effects in the FFA measures. 
+
+```{r print FFA fMRI LE vs ERP}
+
+for (ERP in seq.int(25,36)){
+  print(ggplot(data = ERP_fMRI, aes_string(x="L_DELAY_LE", y = colnames(ERP_fMRI)[ERP]))+
+          geom_point()+
+          stat_smooth(method="loess")+
+          theme_classic()+
+          theme(aspect.ratio=1)
+  ) 
 }
 
+for (ERP in seq.int(25,36)){
+  print(ggplot(data = ERP_fMRI, aes_string(x="R_DELAY_LE", y = colnames(ERP_fMRI)[ERP]))+
+          geom_point()+
+          stat_smooth(method="loess")+
+          theme_classic()+
+          theme(aspect.ratio=1)
+  ) 
+}
 ```
 
+## ERSP
 
 ```{r make ERSP/fMRI plots}
 
@@ -4151,8 +4213,8 @@ ERSP_fMRI_plots <- list()
 ERSP_fMRI <- merge(fMRI_measures, ERSP_measures, by= "PTID")
 sig_linear_ERSP_fMRI <- list()
 
-cumulative_df_ERSP <- data.frame(matrix(nrow=1,ncol=2))
-
+cumulative_df_ERSP <- data.frame(matrix(nrow=1,ncol=4))
+colnames(cumulative_df_ERSP) <- c("ERSP_measure", "fMRI_measure", "corr", "p_value")
 
 plot_count <- 1
 sig_plot_count <- 1
@@ -4168,7 +4230,7 @@ for (ERSP in seq.int(25,60)){
     if (cor_results$p.value < 0.05){
       sig_linear_ERSP_fMRI[[sig_plot_count]] <- ERSP_fMRI_plots[[plot_count]]
       sig_plot_count <- sig_plot_count +1 
-      cumulative_df_ERSP <- rbind(cumulative_df_ERSP, c(colnames(ERSP_fMRI)[ERSP], colnames(ERSP_fMRI)[fMRI]))
+      cumulative_df_ERSP <- rbind(cumulative_df_ERSP, c(colnames(ERSP_fMRI)[ERSP], colnames(ERSP_fMRI)[fMRI], cor_results$estimate, cor_results$p.value))
       
     } 
     plot_count <- plot_count+1
@@ -4177,6 +4239,32 @@ for (ERSP in seq.int(25,60)){
 
 
 ```
+
+### Linear Correlations 
+
+Just like before, we're only seeing linear correlations between ERSP measures and fMRI measures in the FFA regions. 
+
+In particular, we see the most linear relationships between alpha (mostly in the mid occipital cluster - the F electrode correlations are significant but look like they're being driven by an outlier) and delay and probe activity and beta mostly with delay period. For the most part, it looks like the beta correlations are real. 
+
+```{r print significant linear relationships between ERSPs/fMRI}
+
+cumulative_df_ERSP <- cumulative_df_ERSP[2:nrow(cumulative_df_ERSP),]
+
+cumulative_df_ERSP %>% 
+  kable(format = "html", escape = F) %>%
+  kable_styling("striped", full_width = F) 
+
+for (idx in seq.int(1,length(sig_linear_ERSP_fMRI))){
+  print(sig_linear_ERSP_fMRI[[idx]])
+}
+
+```
+
+### Non-linear with DFR 
+
+Again, we're going to focus on the DFR load effects, since that's where we see the non-linear effects in the fMRI and behavioral measures. 
+
+The only things that I'd potentially think shows a non-linear relationship would be the high and low load alpha during cue period at the F electrodes, the load effect for alpha in the mid occipital cluster during the cue period, and the load effect for beta during cue period at the F electrode and the mid occipital cluster. 
 
 ```{r print DFR fMRI LE vs ERSP}
 
@@ -4190,10 +4278,75 @@ for (ERSP in seq.int(25,60)){
 }
 ```
 
-```{r print significant linear relationships between ERSPs/fMRI}
+Plotting bar graphs of the tertiles confirms the U shaped relationships, except for the high load alpha power during cue at the F electrodes. 
 
-for (idx in seq.int(1,length(sig_linear_ERSP_fMRI))){
-  print(sig_linear_ERSP_fMRI[[idx]])
-}
+```{r plot tertiles DFR vs ERSP}
+
+plot_tertiles(ERSP_fMRI %>% select(c("DFR_Load3_Load1", "high_alpha_cue_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("DFR_Load3_Load1", "low_alpha_cue_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("DFR_Load3_Load1", "LE_alpha_cue_midOccip")))
+plot_tertiles(ERSP_fMRI %>% select(c("DFR_Load3_Load1", "LE_beta_cue_midOccip")))
+plot_tertiles(ERSP_fMRI %>% select(c("DFR_Load3_Load1", "LE_beta_cue_F")))
+
 
 ```
+
+
+### Non-linear ERSP with FFA 
+
+But we're also going to look in the FFA for good measure. 
+
+While we didn't really see any non-linear relationships with FFA activity and the ERP measures, we're seeing some here, particularly with alpha power in the F electrodes. Key relationships to look at in the scatter plots: 
+
+Right FFA delay:
+
++ high load alpha during probe at F 
++ load effect alpha power during cue at F 
++ high load alpha power delay at mid occipital 
++ load effect beta power during delay at F 
++ high load beta power during probe at F 
+
+Left FFA delay: 
+
++ high load alpha during cue at F 
++ load effect alpha during cue at mid occipital 
++ low load beta during cue at F 
+
+```{r print DFR fMRI LE vs ERSP}
+
+for (ERSP in seq.int(25,60)){
+  print(ggplot(data = ERSP_fMRI, aes_string(x="R_DELAY_LE", y = colnames(ERSP_fMRI)[ERSP]))+
+          geom_point()+
+          stat_smooth(method="loess")+
+          theme_classic()+
+          theme(aspect.ratio=1)
+  ) 
+}
+
+for (ERSP in seq.int(25,60)){
+  print(ggplot(data = ERSP_fMRI, aes_string(x="L_DELAY_LE", y = colnames(ERSP_fMRI)[ERSP]))+
+          geom_point()+
+          stat_smooth(method="loess")+
+          theme_classic()+
+          theme(aspect.ratio=1)
+  ) 
+}
+```
+
+However, looking at the averages over tertiles, the only thing that really shows any U shape relationship is alpha power at high load in the F electrode with the right delay FFA, and even then, it has pretty large error bars. 
+
+```{r plot tertiles ERSP vs FFA}
+
+plot_tertiles(ERSP_fMRI %>% select(c("R_DELAY_LE", "high_alpha_probe_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("R_DELAY_LE", "LE_alpha_cue_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("R_DELAY_LE", "high_alpha_delay_midOccip")))
+plot_tertiles(ERSP_fMRI %>% select(c("R_DELAY_LE", "LE_beta_delay_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("R_DELAY_LE", "high_beta_probe_F")))
+
+plot_tertiles(ERSP_fMRI %>% select(c("L_DELAY_LE", "high_alpha_cue_F")))
+plot_tertiles(ERSP_fMRI %>% select(c("L_DELAY_LE", "LE_alpha_cue_midOccip")))
+plot_tertiles(ERSP_fMRI %>% select(c("L_DELAY_LE", "low_beta_cue_F")))
+
+
+```
+
