@@ -7,14 +7,20 @@ prep_trial_levels_for_plot <- function(data){
   avg_data = data.frame(t(data.frame(high_correct = colMeans(data[["high_correct"]][,1:14]),
                                      low_correct = colMeans(data[["low_correct"]][,1:14]),
                                      high_incorrect = colMeans(data[["high_incorrect"]][,1:14]),
-                                     low_incorrect = colMeans(data[["low_incorrect"]][,1:14],na.rm=TRUE))))
+                                     low_incorrect = colMeans(data[["low_incorrect"]][,1:14],na.rm=TRUE), 
+                                     high_load_correct_diff = colMeans(data[["high_correct"]][,1:14] - data[["high_incorrect"]][,1:14]),
+                                     low_load_correct_diff = colMeans(data[["low_correct"]][,1:14] - data[["low_incorrect"]][,1:14],na.rm=TRUE))))
+  
+
   avg_data$level <- as.factor(rownames(avg_data))
   colnames(avg_data) <- c(seq.int(1,14),"level")
   
   se_avgs <- data.frame(t(data.frame(high_correct = sapply(data[["high_correct"]][,1:14],se), 
                                      high_incorrect = sapply(data[["high_incorrect"]][,1:14],se), 
                                      low_correct = sapply(data[["low_correct"]][,1:14],se), 
-                                     low_incorrect = sapply(data[["low_incorrect"]][,1:14],se)
+                                     low_incorrect = sapply(data[["low_incorrect"]][,1:14],se), 
+                                     high_load_correct_diff = sapply(data[["high_correct"]][,1:14] - data[["high_incorrect"]][,1:14], se),
+                                     low_load_correct_diff = sapply(data[["low_correct"]][,1:14] - data[["low_incorrect"]][,1:14], se)
   )))
   se_avgs$level <- as.factor(rownames(se_avgs))
   colnames(se_avgs) <- c(seq.int(1,14),"level")

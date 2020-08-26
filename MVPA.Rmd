@@ -52,7 +52,8 @@ averages_from_template <- list(high_correct = read.csv('data/MVPA/fusiform_csvs/
                                low_correct = read.csv('data/MVPA/fusiform_csvs/all_suj_low_correct_avg.csv',header=FALSE), 
                                low_incorrect = read.csv('data/MVPA/fusiform_csvs/all_suj_low_incorrect_avg.csv',header=FALSE))
 
-
+averages_from_template[["high_load_correct_diff"]] <- averages_from_template[["high_correct"]][,1:14] - averages_from_template[["high_incorrect"]][,1:14]
+averages_from_template[["low_load_correct_diff"]] <- averages_from_template[["low_correct"]][,1:14] - averages_from_template[["low_incorrect"]][,1:14]
 
 # averages from individual trials
 individual_trial_averages_probs <- list(
@@ -61,6 +62,10 @@ individual_trial_averages_probs <- list(
   low_correct = read.csv('data/MVPA/fusiform_csvs/all_suj_low_correct_indiv_trial_avg_probs.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/fusiform_csvs/all_suj_low_incorrect_indiv_trial_avg_probs.csv',header=FALSE)) 
 
+individual_trial_averages_probs[["high_load_correct_diff"]] <- individual_trial_averages_probs[["high_correct"]][,1:14] - individual_trial_averages_probs[["high_incorrect"]][,1:14]
+individual_trial_averages_probs[["low_load_correct_diff"]] <- individual_trial_averages_probs[["low_correct"]][,1:14] - individual_trial_averages_probs[["low_incorrect"]][,1:14]
+
+
 # averages from individual trials
 individual_trial_averages_preds <- list(
   high_correct = read.csv('data/MVPA/fusiform_csvs/all_suj_high_correct_indiv_trial_avg_preds.csv',header=FALSE),
@@ -68,13 +73,18 @@ individual_trial_averages_preds <- list(
   low_correct = read.csv('data/MVPA/fusiform_csvs/all_suj_low_correct_indiv_trial_avg_preds.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/fusiform_csvs/all_suj_low_incorrect_indiv_trial_avg_preds.csv',header=FALSE)) 
 
+individual_trial_averages_preds[["high_load_correct_diff"]] <- individual_trial_averages_preds[["high_correct"]][,1:14] - individual_trial_averages_preds[["high_incorrect"]][,1:14]
+
+individual_trial_averages_preds[["low_load_correct_diff"]] <- individual_trial_averages_preds[["low_correct"]][,1:14] - individual_trial_averages_preds[["low_incorrect"]][,1:14]
+
+
 # replace NaNs with NA, add in PTID  
 
-for (i in seq.int(1,4)){
+for (i in seq.int(1,6)){
   for (ii in seq.int(1,14)){
     averages_from_template[[i]][is.nan(averages_from_template[[i]][,ii]),ii] <- NA
-    individual_trial_averages_probs[[i]][is.nan(individual_trial_averages_probs[[i]][,ii]),ii]
-    individual_trial_averages_preds[[i]][is.nan(individual_trial_averages_preds[[i]][,ii]),ii]
+    individual_trial_averages_probs[[i]][is.nan(individual_trial_averages_probs[[i]][,ii]),ii] <- NA
+    individual_trial_averages_preds[[i]][is.nan(individual_trial_averages_preds[[i]][,ii]),ii] <- NA
     
   }
   averages_from_template[[i]]$PTID <- constructs_fMRI$PTID
@@ -115,11 +125,11 @@ It's good to see here that the probability of classifying a face in this task mo
 
 ### From individual trials 
 
-There is signficantly higher likelihood of decoding a face during encoding in high load trials than low load trials. 
+There is significantly higher likelihood of decoding a face during encoding in high load trials than low load trials. 
 
 ```{r plot individual trial avgs for all subjects}
 
-ggplot(data=individual_trial_probs_melt,aes(x=TR,y=value))+
+ggplot(data=individual_trial_probs_melt %>% filter(level %in% c("high_correct", "high_incorrect", "low_correct", "low_incorrect")),aes(x=TR,y=value))+
   geom_line(aes(color=level))+
   geom_line(aes(x=TR,y=0.33),color="black",linetype="dotted")+
   geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=level),alpha=0.2)+
@@ -138,6 +148,21 @@ t.test(encoding_level_avg$high,encoding_level_avg$low,paired=TRUE)
 
 ```
 
+Here, we're looking at correct - incorrect probability - typically, we see a higher probability in the correct trials, but it seems like in the high load trials, it's more likely to predict a face from the incorrect trials than the correct ones during the delay period. Must take this with a grain of salt, however, since those TRs don't have above chance likelihood of predicting a face. 
+
+```{r plot differences between correctness for all subjects}
+
+ggplot(data=individual_trial_probs_melt %>% filter(level %in% c("low_load_correct_diff","high_load_correct_diff")),aes(x=TR,y=value))+
+  geom_line(aes(x=TR,y=0), linetype="dotted")+
+  geom_line(aes(color=level))+
+  geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=level),alpha=0.2)+
+  scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+  ylab("Correct - Incorrect Diff in Probability of Classifying Faces")+
+  theme_classic()
+
+
+```
+
 ### From templates
 
 In the template, however, there is no difference between load at encoding. Instead, we see that the low correct have significantly more likelihood of having a face classified at probe than either of the high load templates. 
@@ -145,7 +170,7 @@ In the template, however, there is no difference between load at encoding. Inste
 ```{r plot template average over all subjects}
 
 
-ggplot(data=template_preds_melt,aes(x=TR,y=value))+
+ggplot(data=template_preds_melt%>% filter(level %in% c("high_correct", "high_incorrect", "low_correct", "low_incorrect")),aes(x=TR,y=value))+
   geom_line(aes(color=level))+
   geom_line(aes(x=TR,y=0.33),color="black",linetype="dotted")+
   geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=level),alpha=0.2)+
@@ -166,6 +191,19 @@ TukeyHSD(probe.aov)
 
 ```
 
+Weirdly, in the template, it is during the low load trials where we really can see prediction from the faces. 
+
+```{r plot differences between correctness for template}
+
+ggplot(data=template_preds_melt %>% filter(level %in% c("low_load_correct_diff","high_load_correct_diff")),aes(x=TR,y=value))+
+  geom_line(aes(color=level))+
+  geom_ribbon(aes(x=TR,ymin=se_min,ymax=se_max,fill=level),alpha=0.2)+
+  scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
+  ylab("Correct - Incorrect Diff in Probability of Classifying Faces")+
+  theme_classic()
+
+```
+
 I'm not 100% sure this is statistically valid, but the average prediction is higher for the predictions from template vs predictions from the individual trials. 
 
 ```{r compare template to indiv trials}
@@ -180,7 +218,6 @@ compare_across_temp_indiv <- data.frame(template = rowMeans(cbind(averages_from_
 wilcox.test(compare_across_temp_indiv$template, compare_across_temp_indiv$indiv,paired=TRUE)
 
 ```
-
 
 ## By Working Memory Capacity Groups 
 
@@ -278,9 +315,11 @@ The only significant relationship between classification probability averaged ov
 ```{r make plots to correlate indiv over time}
 
 indiv_avg_over_time <- data.frame(high_correct = rowMeans(individual_trial_averages_probs[["high_correct"]][,1:14]),
-                                     high_incorrect = rowMeans(individual_trial_averages_probs[["high_incorrect"]][,1:14]),
-                                     low_correct = rowMeans(individual_trial_averages_probs[["low_correct"]][,1:14]),
-                                     low_incorrect = rowMeans(individual_trial_averages_probs[["low_incorrect"]][,1:14],na.rm=TRUE))
+                                  high_incorrect = rowMeans(individual_trial_averages_probs[["high_incorrect"]][,1:14]),
+                                  low_correct = rowMeans(individual_trial_averages_probs[["low_correct"]][,1:14]),
+                                  low_incorrect = rowMeans(individual_trial_averages_probs[["low_incorrect"]][,1:14],na.rm=TRUE), 
+                                  high_load_diff_correct = rowMeans(individual_trial_averages_probs[["high_load_correct_diff"]][,1:14]),
+                                  low_load_diff_correct = rowMeans(individual_trial_averages_probs[["low_load_correct_diff"]][,1:14]))
 
 indiv_avg_over_time[is.na(indiv_avg_over_time)] <- NA 
 indiv_avg_over_time <- data.frame(indiv_avg_over_time, omnibus_span = constructs_fMRI$omnibus_span_no_DFR_MRI, PTID = constructs_fMRI$PTID)
@@ -289,8 +328,8 @@ indiv_avg_over_time <- merge(indiv_avg_over_time, p200_data[,c("PTID","BPRS_TOT"
 
 plot_list <- list()
 
-for (i in seq.int(1,4)){
-  plot_data <- indiv_avg_over_time[,c(i+1,6:9)]
+for (i in seq.int(1,6)){
+  plot_data <- indiv_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
   plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
     geom_point()+
@@ -319,17 +358,31 @@ for (i in seq.int(1,4)){
   (plot_list[["omnibus"]][[3]] + plot_list[["omnibus"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and Omnibus Span")
 
+(plot_list[["omnibus"]][[5]] + plot_list[["omnibus"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and Omnibus Span")
+
 (plot_list[["DFR_Acc"]][[1]] + plot_list[["DFR_Acc"]][[2]]) /
   (plot_list[["DFR_Acc"]][[3]] + plot_list[["DFR_Acc"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and DFR High Load Accuracy")
 
+(plot_list[["DFR_Acc"]][[5]] + plot_list[["DFR_Acc"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and DFR High Load Accuracy")
+
 (plot_list[["BPRS"]][[1]] + plot_list[["BPRS"]][[2]]) /
   (plot_list[["BPRS"]][[3]] + plot_list[["BPRS"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and BPRS")
+(plot_list[["BPRS"]][[5]] + plot_list[["BPRS"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
 
 cor.test(indiv_avg_over_time$low_correct, indiv_avg_over_time$omnibus_span)
+cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$omnibus_span)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$omnibus_span)
+
 cor.test(indiv_avg_over_time$low_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
 cor.test(indiv_avg_over_time$high_incorrect, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+
 
 cor.test(indiv_avg_over_time$low_correct, indiv_avg_over_time$BPRS_TOT)
 cor.test(indiv_avg_over_time$high_correct, indiv_avg_over_time$BPRS_TOT)
@@ -351,12 +404,12 @@ Next step is to pull out some of these correlations and see if they're significa
 data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
 data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
 
-data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot <- data_to_plot[,c(1,7,14,15,41,42)]
 data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
 
 corr_to_behav_plots <- list()
 
-for (i in seq.int(1,4)){
+for (i in seq.int(1,6)){
   measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
   
   for (measure in seq.int(3,6)){
@@ -389,6 +442,10 @@ for (i in seq.int(1,4)){
   plot_layout(guides="collect")+
   plot_annotation(title = "Correlation between face classification and behavioral measures")
 
+(corr_to_behav_plots[[5]] + corr_to_behav_plots[[6]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Correlation between difference across correctness in face classification and behavioral measures")
+
 
 ```
 
@@ -396,7 +453,7 @@ for (i in seq.int(1,4)){
 
 plot_list <- list()
 
-for(trial_type in seq.int(1,4)){ 
+for(trial_type in seq.int(1,6)){ 
   temp_plot_data <- merge(p200_data, individual_trial_averages_probs[[trial_type]],by="PTID")
   temp_plot_data <- merge(temp_plot_data,constructs_fMRI,by="PTID")
   
@@ -475,23 +532,37 @@ for(trial_type in seq.int(1,4)){
 #### Encoding 
 
 ```{r plot specific time points from indiv - encoding }
+
 (plot_list[["omnibus"]][["cue"]][[1]] + plot_list[["omnibus"]][["cue"]][[2]]) /  
   (plot_list[["omnibus"]][["cue"]][[3]] + plot_list[["omnibus"]][["cue"]][[4]]) +
+  plot_annotation(title = "Omnibus vs Classification at Cue Period")
+
+(plot_list[["omnibus"]][["cue"]][[5]] + plot_list[["omnibus"]][["cue"]][[6]])  +
   plot_annotation(title = "Omnibus vs Classification at Cue Period")
 
 (plot_list[["L3_Acc"]][["cue"]][[1]] + plot_list[["L3_Acc"]][["cue"]][[2]]) /  
   (plot_list[["L3_Acc"]][["cue"]][[3]] + plot_list[["L3_Acc"]][["cue"]][[4]]) +
   plot_annotation(title = "L3_Acc vs Classification at Cue Period")
 
+(plot_list[["L3_Acc"]][["cue"]][[5]] + plot_list[["L3_Acc"]][["cue"]][[6]])  +
+  plot_annotation(title = "L3_Acc vs Classification at Cue Period")
+
 (plot_list[["BPRS"]][["cue"]][[1]] + plot_list[["BPRS"]][["cue"]][[2]]) /  
   (plot_list[["BPRS"]][["cue"]][[3]] + plot_list[["BPRS"]][["cue"]][[4]]) +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
+
+(plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]])  +
+  plot_annotation(title = "BPRS vs Classification at Cue Period")
+
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+
 
 ``` 
 
 #### Delay 
 
-We see that there is a significant negative relationship between probability of face classification at delay in correct low load trials and high load accuracy. 
+We see that there is a significant negative relationship between probability of face classification at delay in correct low load trials and high load accuracy and the difference between correct and incorrect trials at low load. 
 
 ``` {r plot specific time points from indiv - delay }
 
@@ -499,15 +570,26 @@ We see that there is a significant negative relationship between probability of 
   (plot_list[["omnibus"]][["delay"]][[3]] + plot_list[["omnibus"]][["delay"]][[4]]) +
   plot_annotation(title = "Omnibus vs Classification at delay Period")
 
+(plot_list[["omnibus"]][["delay"]][[5]] + plot_list[["omnibus"]][["delay"]][[6]])  +
+  plot_annotation(title = "Omnibus vs Classification at delay Period")
+
 (plot_list[["L3_Acc"]][["delay"]][[1]] + plot_list[["L3_Acc"]][["delay"]][[2]]) /  
   (plot_list[["L3_Acc"]][["delay"]][[3]] + plot_list[["L3_Acc"]][["delay"]][[4]]) +
+  plot_annotation(title = "L3_Acc vs Classification at delay Period")
+
+(plot_list[["L3_Acc"]][["delay"]][[5]] + plot_list[["L3_Acc"]][["delay"]][[6]])  +
   plot_annotation(title = "L3_Acc vs Classification at delay Period")
 
 (plot_list[["BPRS"]][["delay"]][[1]] + plot_list[["BPRS"]][["delay"]][[2]]) /  
   (plot_list[["BPRS"]][["delay"]][[3]] + plot_list[["BPRS"]][["delay"]][[4]]) +
   plot_annotation(title = "BPRS vs Classification at delay Period")
 
+(plot_list[["BPRS"]][["delay"]][[5]] + plot_list[["BPRS"]][["delay"]][[6]])  +
+  plot_annotation(title = "BPRS vs Classification at delay Period")
+
 cor.test(individual_trial_averages_probs[["low_correct"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
+
 
 
 
@@ -515,7 +597,7 @@ cor.test(individual_trial_averages_probs[["low_correct"]]$V8,temp_plot_data$XDFR
 
 #### Probe
 
-Probability of classification at correct low load trial is significantly correlated with omnibus span at TR 12 and positively with BPRS at TR 10. We also see a significant negative relationship with accuracy in incorrect high load trials. Here, we're looking at the scatter plots from TR 11. 
+Probability of classification at correct low load trial is significantly correlated with omnibus span at TR 12 and positively with BPRS at TR 10. We also see a significant negative relationship with accuracy in incorrect high load trials. Here, we're looking at the scatter plots from TR 11. At TR 11, we see a significant relationshihp between the correct - incorrect difference at high load high load accuracy. 
 
 ```{r plot specific time points from indiv - probe }
 
@@ -523,18 +605,27 @@ Probability of classification at correct low load trial is significantly correla
   (plot_list[["omnibus"]][["probe"]][[3]] + plot_list[["omnibus"]][["probe"]][[4]]) +
   plot_annotation(title = "Omnibus vs Classification at probe Period")
 
+(plot_list[["omnibus"]][["probe"]][[5]] + plot_list[["omnibus"]][["probe"]][[6]])  +
+  plot_annotation(title = "Omnibus vs Classification at probe Period")
+
 (plot_list[["L3_Acc"]][["probe"]][[1]] + plot_list[["L3_Acc"]][["probe"]][[2]]) /  
   (plot_list[["L3_Acc"]][["probe"]][[3]] + plot_list[["L3_Acc"]][["probe"]][[4]]) +
+  plot_annotation(title = "L3_Acc vs Classification at probe Period")
+
+(plot_list[["L3_Acc"]][["probe"]][[5]] + plot_list[["L3_Acc"]][["probe"]][[6]])  +
   plot_annotation(title = "L3_Acc vs Classification at probe Period")
 
 (plot_list[["BPRS"]][["probe"]][[1]] + plot_list[["BPRS"]][["probe"]][[2]]) /  
   (plot_list[["BPRS"]][["probe"]][[3]] + plot_list[["BPRS"]][["probe"]][[4]]) +
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
-cor.test(individual_trial_averages_probs[["low_correct"]]$V12,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["high_incorrect"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+(plot_list[["BPRS"]][["probe"]][[5]] + plot_list[["BPRS"]][["probe"]][[6]])  +
+  plot_annotation(title = "BPRS vs Classification at probe Period")
 
 cor.test(individual_trial_averages_probs[["low_correct"]]$V10,temp_plot_data$BPRS_TOT)
+cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+
 
 
 
@@ -544,7 +635,7 @@ cor.test(individual_trial_averages_probs[["low_correct"]]$V10,temp_plot_data$BPR
 
 behav_classification_corr_list <- list()
 
-for (trial_type in seq.int(1,4)){ 
+for (trial_type in seq.int(1,6)){ 
   group_corrs_omnibus <- data.frame(matrix(nrow=3,ncol=14))
   rownames(group_corrs_omnibus) <- names(split_indiv_probs[["all_data"]][[trial_type]])[1:3]
   colnames(group_corrs_omnibus) <- seq.int(1,14)
@@ -589,7 +680,7 @@ behav_classification_corr_melt <- list()
 behav_split_plot_list <- list()
 
 for (measure in seq.int(1,3)){
-  for (trial_type in seq.int(1,4)){ 
+  for (trial_type in seq.int(1,6)){ 
     behav_classification_corr_melt[[names(behav_classification_corr_list)[measure]]][[names(behav_classification_corr_list[[measure]])[trial_type]]] <- melt(behav_classification_corr_list[[measure]][[trial_type]],id.vars="level")
     behav_classification_corr_melt[[measure]][[trial_type]]$variable <- as.numeric(as.character(behav_classification_corr_melt[[measure]][[trial_type]]$variable))
     behav_classification_corr_melt[[measure]][[trial_type]]$level <- factor(behav_classification_corr_melt[[measure]][[trial_type]]$level, levels=c("high","med","low"))
@@ -615,13 +706,25 @@ for (measure in seq.int(1,3)){
   plot_annotation("Omnibus Span Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
 
+(behav_split_plot_list[["omnibus"]][[5]] + behav_split_plot_list[["omnibus"]][[6]]) + 
+  plot_annotation("Omnibus Span Correlation with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
 (behav_split_plot_list[["L3_Acc"]][[1]] + behav_split_plot_list[["L3_Acc"]][[2]]) / 
   (behav_split_plot_list[["L3_Acc"]][[3]] + behav_split_plot_list[["L3_Acc"]][[4]])+
   plot_annotation("High Load Acc Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
 
+(behav_split_plot_list[["L3_Acc"]][[5]] + behav_split_plot_list[["L3_Acc"]][[6]]) +
+  plot_annotation("High Load Acc Correlation with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
 (behav_split_plot_list[["BPRS"]][[1]] + behav_split_plot_list[["BPRS"]][[2]]) / 
   (behav_split_plot_list[["BPRS"]][[3]] + behav_split_plot_list[["BPRS"]][[4]])+
+  plot_annotation("BPRS Total Correlation with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
+(behav_split_plot_list[["BPRS"]][[5]] + behav_split_plot_list[["BPRS"]][[6]]) +
   plot_annotation("BPRS Total Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
 
@@ -641,7 +744,9 @@ If we average over time, there are no relationships between template classificat
 template_avg_over_time <- data.frame(high_correct = rowMeans(averages_from_template[["high_correct"]][,1:14]),
                                      high_incorrect = rowMeans(averages_from_template[["high_incorrect"]][,1:14]),
                                      low_correct = rowMeans(averages_from_template[["low_correct"]][,1:14]),
-                                     low_incorrect = rowMeans(averages_from_template[["low_incorrect"]][,1:14],na.rm=TRUE))
+                                     low_incorrect = rowMeans(averages_from_template[["low_incorrect"]][,1:14],na.rm=TRUE), 
+                                  high_load_diff_correct = rowMeans(averages_from_template[["high_load_correct_diff"]][,1:14]),
+                                  low_load_diff_correct = rowMeans(averages_from_template[["low_load_correct_diff"]][,1:14]))
 
 template_avg_over_time[is.na(template_avg_over_time)] <- NA 
 template_avg_over_time <- data.frame(template_avg_over_time, omnibus_span = constructs_fMRI$omnibus_span_no_DFR_MRI, PTID = constructs_fMRI$PTID)
@@ -650,8 +755,8 @@ template_avg_over_time <- merge(template_avg_over_time, p200_data[,c("PTID","BPR
 
 plot_list <- list()
 
-for (i in seq.int(1,4)){
-  plot_data <- template_avg_over_time[,c(i+1,6:9)]
+for (i in seq.int(1,6)){
+  plot_data <- template_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
   plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
     geom_point()+
@@ -680,13 +785,21 @@ for (i in seq.int(1,4)){
   (plot_list[["omnibus"]][[3]] + plot_list[["omnibus"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and Omnibus Span")
 
+(plot_list[["omnibus"]][[5]] + plot_list[["omnibus"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and Omnibus Span")
+
 (plot_list[["DFR_Acc"]][[1]] + plot_list[["DFR_Acc"]][[2]]) /
   (plot_list[["DFR_Acc"]][[3]] + plot_list[["DFR_Acc"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and DFR High Load Accuracy")
 
+(plot_list[["DFR_Acc"]][[5]] + plot_list[["DFR_Acc"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and DFR High Load Accuracy")
+
 (plot_list[["BPRS"]][[1]] + plot_list[["BPRS"]][[2]]) /
   (plot_list[["BPRS"]][[3]] + plot_list[["BPRS"]][[4]]) + 
   plot_annotation(title="Correlation of face probability and BPRS")
+(plot_list[["BPRS"]][[5]] + plot_list[["BPRS"]][[6]])+
+  plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
 
 
 ```
@@ -700,12 +813,13 @@ for (i in seq.int(1,4)){
 data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
 data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
 
-data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot <- data_to_plot[,c(1,7,14,15,41,42)]
 data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
 
 corr_to_behav_plots <- list()
 
-for (i in seq.int(1,4)){
+
+for (i in seq.int(1,6)){
   measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
   
   for (measure in seq.int(3,6)){
@@ -738,6 +852,10 @@ for (i in seq.int(1,4)){
   plot_layout(guides="collect")+
   plot_annotation(title = "Correlation between face classification and behavioral measures")
 
+(corr_to_behav_plots[[5]] + corr_to_behav_plots[[6]])+
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Correlation between face classification and behavioral measures")
+
 
 ```
 
@@ -745,7 +863,7 @@ for (i in seq.int(1,4)){
 
 plot_list <- list()
 
-for(trial_type in seq.int(1,4)){ 
+for(trial_type in seq.int(1,6)){ 
   temp_plot_data <- merge(p200_data, averages_from_template[[trial_type]],by="PTID")
   temp_plot_data <- merge(temp_plot_data,constructs_fMRI,by="PTID")
   
@@ -824,16 +942,27 @@ for(trial_type in seq.int(1,4)){
 #### Encoding 
 
 ```{r plot specific time points from template - encoding }
+
+
 (plot_list[["omnibus"]][["cue"]][[1]] + plot_list[["omnibus"]][["cue"]][[2]]) /  
   (plot_list[["omnibus"]][["cue"]][[3]] + plot_list[["omnibus"]][["cue"]][[4]]) +
+  plot_annotation(title = "Omnibus vs Classification at Cue Period")
+
+(plot_list[["omnibus"]][["cue"]][[5]] + plot_list[["omnibus"]][["cue"]][[6]]) +
   plot_annotation(title = "Omnibus vs Classification at Cue Period")
 
 (plot_list[["L3_Acc"]][["cue"]][[1]] + plot_list[["L3_Acc"]][["cue"]][[2]]) /  
   (plot_list[["L3_Acc"]][["cue"]][[3]] + plot_list[["L3_Acc"]][["cue"]][[4]]) +
   plot_annotation(title = "L3_Acc vs Classification at Cue Period")
 
+(plot_list[["L3_Acc"]][["cue"]][[5]] + plot_list[["L3_Acc"]][["cue"]][[6]]) +
+  plot_annotation(title = "L3_Acc vs Classification at Cue Period")
+
 (plot_list[["BPRS"]][["cue"]][[1]] + plot_list[["BPRS"]][["cue"]][[2]]) /  
   (plot_list[["BPRS"]][["cue"]][[3]] + plot_list[["BPRS"]][["cue"]][[4]]) +
+  plot_annotation(title = "BPRS vs Classification at Cue Period")
+
+(plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]]) +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
 
 
@@ -849,13 +978,23 @@ There is a significant relationship between span and classification probability 
   (plot_list[["omnibus"]][["delay"]][[3]] + plot_list[["omnibus"]][["delay"]][[4]]) +
   plot_annotation(title = "Omnibus vs Classification at delay Period")
 
+(plot_list[["omnibus"]][["delay"]][[5]] + plot_list[["omnibus"]][["delay"]][[6]]) +
+  plot_annotation(title = "Omnibus vs Classification at delay Period")
+
 (plot_list[["L3_Acc"]][["delay"]][[1]] + plot_list[["L3_Acc"]][["delay"]][[2]]) /  
   (plot_list[["L3_Acc"]][["delay"]][[3]] + plot_list[["L3_Acc"]][["delay"]][[4]]) +
+  plot_annotation(title = "L3_Acc vs Classification at delay Period")
+
+(plot_list[["L3_Acc"]][["delay"]][[5]] + plot_list[["L3_Acc"]][["delay"]][[6]]) +
   plot_annotation(title = "L3_Acc vs Classification at delay Period")
 
 (plot_list[["BPRS"]][["delay"]][[1]] + plot_list[["BPRS"]][["delay"]][[2]]) /  
   (plot_list[["BPRS"]][["delay"]][[3]] + plot_list[["BPRS"]][["delay"]][[4]]) +
   plot_annotation(title = "BPRS vs Classification at delay Period")
+
+(plot_list[["BPRS"]][["delay"]][[5]] + plot_list[["BPRS"]][["delay"]][[6]]) +
+  plot_annotation(title = "BPRS vs Classification at delay Period")
+
 
 cor.test(averages_from_template[["high_incorrect"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 
@@ -864,7 +1003,7 @@ cor.test(averages_from_template[["high_incorrect"]]$V8,temp_plot_data$omnibus_sp
 
 #### Probe
 
-There is a significant negative relationship with accuracy and classification at incorrect high load trials. 
+There is a significant negative relationship with accuracy and classification at incorrect high load trials and the difference between high correct and incorrect trials. 
 
 ```{r plot specific time points from template - probe }
 
@@ -872,25 +1011,38 @@ There is a significant negative relationship with accuracy and classification at
   (plot_list[["omnibus"]][["probe"]][[3]] + plot_list[["omnibus"]][["probe"]][[4]]) +
   plot_annotation(title = "Omnibus vs Classification at probe Period")
 
+(plot_list[["omnibus"]][["probe"]][[5]] + plot_list[["omnibus"]][["probe"]][[6]]) +
+  plot_annotation(title = "Omnibus vs Classification at probe Period")
+
 (plot_list[["L3_Acc"]][["probe"]][[1]] + plot_list[["L3_Acc"]][["probe"]][[2]]) /  
   (plot_list[["L3_Acc"]][["probe"]][[3]] + plot_list[["L3_Acc"]][["probe"]][[4]]) +
+  plot_annotation(title = "L3_Acc vs Classification at probe Period")
+
+
+(plot_list[["L3_Acc"]][["probe"]][[5]] + plot_list[["L3_Acc"]][["probe"]][[6]]) +
   plot_annotation(title = "L3_Acc vs Classification at probe Period")
 
 (plot_list[["BPRS"]][["probe"]][[1]] + plot_list[["BPRS"]][["probe"]][[2]]) /  
   (plot_list[["BPRS"]][["probe"]][[3]] + plot_list[["BPRS"]][["probe"]][[4]]) +
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
+(plot_list[["BPRS"]][["probe"]][[5]] + plot_list[["BPRS"]][["probe"]][[6]]) +
+  plot_annotation(title = "BPRS vs Classification at probe Period")
+
+
+
 cor.test(averages_from_template[["high_incorrect"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(averages_from_template[["high_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
 
 
- 
+
 ```
 
 ```{r correlate behav to each template TR for each group, warning=FALSE}
 
 behav_classification_corr_list <- list()
 
-for (trial_type in seq.int(1,4)){ 
+for (trial_type in seq.int(1,6)){ 
   group_corrs_omnibus <- data.frame(matrix(nrow=3,ncol=14))
   rownames(group_corrs_omnibus) <- names(split_template[["all_data"]][[trial_type]])[1:3]
   colnames(group_corrs_omnibus) <- seq.int(1,14)
@@ -935,7 +1087,7 @@ behav_classification_corr_melt <- list()
 behav_split_plot_list <- list()
 
 for (measure in seq.int(1,3)){
-  for (trial_type in seq.int(1,4)){ 
+  for (trial_type in seq.int(1,6)){ 
     behav_classification_corr_melt[[names(behav_classification_corr_list)[measure]]][[names(behav_classification_corr_list[[measure]])[trial_type]]] <- melt(behav_classification_corr_list[[measure]][[trial_type]],id.vars="level")
     behav_classification_corr_melt[[measure]][[trial_type]]$variable <- as.numeric(as.character(behav_classification_corr_melt[[measure]][[trial_type]]$variable))
     behav_classification_corr_melt[[measure]][[trial_type]]$level <- factor(behav_classification_corr_melt[[measure]][[trial_type]]$level, levels=c("high","med","low"))
@@ -961,15 +1113,29 @@ for (measure in seq.int(1,3)){
   plot_annotation("Omnibus Span Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
 
+(behav_split_plot_list[["omnibus"]][[5]] + behav_split_plot_list[["omnibus"]][[6]]) + 
+  plot_annotation("Omnibus Span Correlation with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
 (behav_split_plot_list[["L3_Acc"]][[1]] + behav_split_plot_list[["L3_Acc"]][[2]]) / 
   (behav_split_plot_list[["L3_Acc"]][[3]] + behav_split_plot_list[["L3_Acc"]][[4]])+
   plot_annotation("High Load Acc Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
 
+(behav_split_plot_list[["L3_Acc"]][[5]] + behav_split_plot_list[["L3_Acc"]][[6]]) + 
+  plot_annotation("High Load Acc Correlation with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
+
 (behav_split_plot_list[["BPRS"]][[1]] + behav_split_plot_list[["BPRS"]][[2]]) / 
   (behav_split_plot_list[["BPRS"]][[3]] + behav_split_plot_list[["BPRS"]][[4]])+
   plot_annotation("BPRS Total Correlation with Face Classification Probability by Group")+
   plot_layout(guides="collect")
+
+(behav_split_plot_list[["BPRS"]][[5]] + behav_split_plot_list[["BPRS"]][[6]]) + 
+  plot_annotation("BPRS Total with Face Classification Probability by Group")+
+  plot_layout(guides="collect")
+
 
 
 ```

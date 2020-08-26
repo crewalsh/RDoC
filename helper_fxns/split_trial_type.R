@@ -4,7 +4,7 @@ split_trial_type <- function(data, groups){
   data_split_avgs <- list()
   
   
-  for (i in seq.int(1,4)){ 
+  for (i in seq.int(1,6)){ 
     data_split[[names(data)[i]]] <- split_into_groups(data[[i]],groups)
     colnames(data_split[[i]][["all"]])[1:14] <- c(1:14)
     
