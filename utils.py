@@ -12,8 +12,8 @@ import scipy.io
 from sklearn.preprocessing import StandardScaler
 
 # define constants
-#base_path = '/u/project/rbilder/RDoC'
-base_path = '/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/MVPA'
+base_path = '/u/project/rbilder/RDoC'
+#base_path = '/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/MVPA'
 TR = 1.5
 category_labels = {"Face": 1, "Object": 2, "Scramble": 3}
 HRF_lag = 4.5
@@ -33,8 +33,8 @@ DFR_average_order = ['low correct', 'low incorrect', 'high correct', 'high incor
 def load_loc_stim_labels(sub):
 
     # sub must be a string
-    #data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
-    data_path = base_path
+    data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
+    #data_path = base_path
     in_file = os.path.join(data_path, 'FFA_onsets_ID%s.mat' % sub)
 
     stim_data = scipy.io.loadmat(in_file)
@@ -51,8 +51,8 @@ def load_loc_stim_labels(sub):
 
 def load_DFR_stim_labels(sub):
 
-    #data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
-    data_path = base_path
+    data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
+    #data_path = base_path
     in_file = os.path.join(data_path, 'DFR_onsets_ID%s.mat' % sub)
 
     stim_labels = scipy.io.loadmat(in_file)
@@ -87,7 +87,7 @@ def load_DFR_stim_labels(sub):
 def time2TR(stim_labels,TR_per_run):
 
     # stim labels should have a shape = (measures, events)
-    # returns labels in units of TRs, expanded out so seeinig all TRs (before only had onsets of blocks/trials)
+    # returns labels in units of TRs, expanded out so seeing all TRs (before only had onsets of blocks/trials)
 
     # Preset variables
     measures, events = stim_labels.shape
@@ -137,8 +137,8 @@ def mask_data(data, mask):
 
 
 def make_bilat_HPC(sub):
-    #data_path = base_path + '/scripts/fmri/BetaSeries/individual_masks/'
-    data_path = base_path
+    data_path = base_path + '/scripts/fmri/BetaSeries/individual_masks/'
+    #data_path = base_path
     l_file_name = "mask_LeftHPC_ID"+sub+".nii"
     r_file_name = "mask_RightHPC_ID"+sub+".nii"
     l_file_in = os.path.join(data_path, l_file_name)
@@ -157,9 +157,16 @@ def make_bilat_HPC(sub):
 
 def load_masked_loc(sub, mask):
 
-    #data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
-    #file_in = os.path.join(data_path, "swrLocalizerFFA.nii")
-    file_in = os.path.join(base_path,"swrLocalizerFFA_%s.nii" % sub)
+    # for Hoffman, smoothed data
+    # data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
+    # file_in = os.path.join(data_path, "swrLocalizerFFA.nii")
+
+    # for Hoffman, unsmoothed data
+    data_path = base_path + '/subjects/ID' + sub + '/analysis/temp'
+    file_in = os.path.join(data_path, "wrLocalizerFFA.nii")
+
+    # local data
+    #file_in = os.path.join(base_path,"swrLocalizerFFA_%s.nii" % sub)
     file_data = nib.load(file_in)
     print("Loaded EPI for subject %s" % sub)
 
@@ -174,12 +181,18 @@ def load_masked_DFR_data(sub, run, mask):
 
     # helper to load in a single run of DFR data and mask it
     nifti_masker = NiftiMasker(mask_img=mask)
-
-    data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
-
     # Load MRI file (in Nifti format) of one localizer run
-    #DFR_in = os.path.join(data_path, "swrDFR_run%d.nii" % run)
-    DFR_in = os.path.join(base_path, "swrDFR_%s_run%d.nii" % (sub, run))
+
+    # Hoffman, smoothed data
+    # data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
+    # DFR_in = os.path.join(data_path, "swrDFR_run%d.nii" % run)
+
+    # Hoffman, unsmoothed data
+    data_path = base_path + '/subjects/ID' + sub + '/analysis/temp'
+    DFR_in = os.path.join(data_path, "wrDFR_run%d.nii" % run)
+
+    # local data
+    #DFR_in = os.path.join(base_path, "swrDFR_%s_run%d.nii" % (sub, run))
 
     DFR_data = nib.load(DFR_in)
     print("Loading data from %s" % DFR_in)
@@ -215,8 +228,8 @@ def reshape_data(label_TR_shifted, masked_data_all, zero_trial_num):
 def find_top_voxels(sub, spm_img, mask, num_vox):
 
     # do feature selection: take to voxels from a given contrast map
-    #data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM/DFR_Art_Model2'
-    data_path = base_path
+    data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM/DFR_Art_Model2'
+    #data_path = base_path
     cont_in = os.path.join(data_path, spm_img)
     contrast_data = nib.load(cont_in)
 
