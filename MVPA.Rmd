@@ -412,16 +412,16 @@ corr_to_behav_plots <- list()
 for (i in seq.int(1,6)){
   measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
   
-  for (measure in seq.int(3,6)){
+  for (measure in seq.int(2,5)){
     for (TR in seq.int(1,14)){
-      measure_by_time[measure-2,TR] <- cor(data_to_plot[,measure],individual_trial_averages_probs[[i]][,TR],use = "pairwise.complete.obs")
+      measure_by_time[measure-1,TR] <- cor(data_to_plot[,measure],individual_trial_averages_probs[[i]][,TR],use = "pairwise.complete.obs")
     }
   }
   
   measure_by_time <- data.frame(t(measure_by_time))
   measure_by_time$TR <- seq.int(1,14)
   
-  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[3:6]
+  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[2:5]
   
   melted_measure_by_time <- melt(measure_by_time,id.vars="TR")
   
@@ -822,16 +822,16 @@ corr_to_behav_plots <- list()
 for (i in seq.int(1,6)){
   measure_by_time <- data.frame(matrix(nrow=4,ncol=14))
   
-  for (measure in seq.int(3,6)){
+  for (measure in seq.int(2,5)){
     for (TR in seq.int(1,14)){
-      measure_by_time[measure-2,TR] <- cor(data_to_plot[,measure],averages_from_template[[i]][,TR],use = "pairwise.complete.obs")
+      measure_by_time[measure-1,TR] <- cor(data_to_plot[,measure],averages_from_template[[i]][,TR],use = "pairwise.complete.obs")
     }
   }
   
   measure_by_time <- data.frame(t(measure_by_time))
   measure_by_time$TR <- seq.int(1,14)
   
-  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[3:6]
+  colnames(measure_by_time)[1:4] <- colnames(data_to_plot)[2:5]
   
   melted_measure_by_time <- melt(measure_by_time,id.vars="TR")
   
