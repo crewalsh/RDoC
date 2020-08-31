@@ -2,11 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="f8f92241-3fd1-409c-96e6-ec10ad861156" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/MVPA_pickle_to_csv.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DFR_MVPA.py" beforeDir="false" afterPath="$PROJECT_DIR$/DFR_MVPA.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.Rmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.html" beforeDir="false" afterPath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.html" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -121,6 +119,9 @@
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="$USER_HOME$/miniconda3/envs/mybrainiak/bin/python3.6" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="false" />

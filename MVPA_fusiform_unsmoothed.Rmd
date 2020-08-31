@@ -99,7 +99,7 @@ save(list=c("clf_acc", "best_c", "averages_from_template", "individual_trial_ave
 
 # Probability of classifying faces 
 
-On average, we were able to classify faces with 79.8% accuracy (statistically significantly different from chance = 0.33). The classifier was trained on data from an independent FFA localizer. Data was masked using a bilateral fusiform mask from the AAL atlas; from that, the top 100 voxels based on the faces vs objects contrast in the overall subject GLM were selected as features for the classifier. The data used to train the classifier were shifted by 4.5 seconds to account for the hemodynamic delay. 
+On average, we were able to classify faces with 72.7% accuracy (statistically significantly different from chance = 0.33). The classifier was trained on data from an independent FFA localizer. Data was masked using a bilateral fusiform mask from the AAL atlas; from that, the top 100 voxels based on the faces vs objects contrast in the overall subject GLM were selected as features for the classifier. The data used to train the classifier were shifted by 4.5 seconds to account for the hemodynamic delay. 
 
 A linear SVM classifer was used; the localizer task was split into 6 blocks of stimuli. These blocks were used in a pre-defined split for cross validation, where one block of each stimulus type was held out as a test set. Data were normalized within the training and test sets separately. Within this training set, another cross validation process was repeated to tune the cost of the model over the values [0.01, 0.1, 1, 10]. The best value of the cost function was used for each cross validation to score the classifier on the test set. The best classifer was also used to predict face presence at each TR during the DFR task. 
 
