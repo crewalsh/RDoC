@@ -12,12 +12,17 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+The first part of this analysis looks at the temporal intersubject correlation - how well the subjects data align over time. Looking at this will allow us to get a measure of "typciality" - how typical an individual subject's brain data is. 
+
+One big caveat here (for both these analyses) is that they're currently done using the SMOOTHED data. 
+
 ```{r import libraries, load data}
 library(tidyverse)
 library(psych)
 library(patchwork)
 library(reshape2)
 library(reticulate)
+library(rmatio)
 reticulate::use_python("/Users/catherinewalsh/miniconda3")
 
 load('data/behav.RData')
@@ -725,32 +730,52 @@ for (network in seq.int(1,5)){
 
 # Spatial ISC 
 
-```{r re-order subjects by span}
+This analysis looks at the inter-subject correlation in two different ROIs: a bilateral fusiform ROI from the AAL atlas, and a mask of all regions that showed high load > low load activation during the delay period of the DFR task. 
 
-span_order <- order(constructs_fMRI$omnibus_span_no_DFR_MRI)
+In order to get this data, we extracted the model-free BOLD activity and applied minimal pre-processing using SPM8 (removing cosine, filtering, detrend and meaning the value across voxels). From there, we separated the data into trials. Because the data was jittered, decided that the onset of a trial should be considered the TR that contains the onset of the trial. Once we had the individual trials separated, we averaged over high and low load trials separately. Correlations were taken across all common voxels in the given mask for each pair of subjects for the high load trials, which is the data that we are showing below. 
 
-fusiform_sISC_ordered <- high_correct_sISC_fusiform[span_order,span_order,]
-DFR_sISC_ordered <- high_correct_sISC_DFR[span_order,span_order,]
+```{r load sISC data}
 
-# select out only subjects who were included in group analyses 
+corr_temp <- read.mat("data/ISC_corr.mat")
+suj_corr_fusiform <- corr_temp[["suj_corr"]]
+corr_temp <- read.mat("data/ISC_corr_DFR_delay.mat")
+suj_corr_DFR <- corr_temp[["suj_corr"]]
 
-fusiform_sISC_ordered_group <- fusiform_sISC_ordered[c(1:56,58:113,115:170),c(1:56,58:113,115:170),]
-DFR_sISC_ordered_group <- DFR_sISC_ordered[c(1:56,58:113,115:170),c(1:56,58:113,115:170),]
+suj_corr_fusiform[is.nan(suj_corr_fusiform)] <- NA
+suj_corr_DFR[is.nan(suj_corr_DFR)] <- NA
 
-# remove NaNs
-fusiform_sISC_ordered_group[is.nan(fusiform_sISC_ordered_group)] <- NA
-DFR_sISC_ordered_group[is.nan(DFR_sISC_ordered_group)] <- NA
+source("helper_fxns/avg_ISC.R")
+source("helper_fxns/corr_ISC.R")
 
 ```
 
+```{r re-order subjects by span sISC}
 
-```{r create average ISC}
+span_order <- order(constructs_fMRI$omnibus_span_no_DFR_MRI)
 
-avg_sISC_fusiform <- avg_ISC(high_correct_sISC_fusiform)
-avg_sISC_DFR <- avg_ISC(high_correct_sISC_DFR)
+fusiform_ISC_ordered <- suj_corr_fusiform[span_order,span_order,]
+DFR_ISC_ordered <- suj_corr_DFR[span_order,span_order,]
 
-overall_avg_sISC_fusiform <- rowMeans(avg_sISC_fusiform)
-overall_avg_sISC_DFR <- rowMeans(avg_sISC_DFR)
+# select out only subjects who were included in group analyses 
+
+fusiform_ISC_ordered_group <- fusiform_ISC_ordered[c(1:56,58:113,115:170),c(1:56,58:113,115:170),]
+DFR_ISC_ordered_group <- DFR_ISC_ordered[c(1:56,58:113,115:170),c(1:56,58:113,115:170),]
+
+# remove NaNs
+fusiform_ISC_ordered_group[is.nan(fusiform_ISC_ordered_group)] <- NA
+DFR_ISC_ordered_group[is.nan(DFR_ISC_ordered_group)] <- NA
+
+
+
+```
+
+```{r create average sISC}
+
+avg_ISC_fusiform <- avg_ISC(suj_corr_fusiform)
+avg_ISC_DFR <- avg_ISC(suj_corr_DFR)
+
+overall_avg_ISC_fusiform <- rowMeans(avg_ISC_fusiform)
+overall_avg_ISC_DFR <- rowMeans(avg_ISC_DFR)
 
 ```
 
@@ -758,12 +783,12 @@ overall_avg_sISC_DFR <- rowMeans(avg_sISC_DFR)
 
 First looking at the fusiform mask allows us to get a sense as to what the visual cortex is doing. Seeing results here might reflect perceptual representation of the stimuli, and if we see correlations during delay, might suggest that subjects are maintaining the percept of the faces in a similar way. 
 
-```{r make correlation matrices - fusiform}
+```{r make correlation matrices - fusiform sISC}
 
 graph_fusiform <- list()
 
 for (TR in seq.int(1,14)){
-  data <- data.frame(fusiform_sISC_ordered_group[,,TR])
+  data <- data.frame(fusiform_ISC_ordered_group[,,TR])
   rownames(data) <- c(1:168)
   colnames(data) <- c(1:168)
   data %>%
@@ -795,7 +820,11 @@ for (TR in seq.int(1,14)){
 
 ```
 
-```{r plot fusiform mask}
+First, we want to just look at the correlations between subjects over time. We can see that peak intersubject correlations happen around TR 4-6, drop and then get higher around TR 8-9. These TRs correspond to the encoding period and the beginning of the probe period - when there are actually stimuli on the screen. 
+
+The lines here represent divisions between groups - subjects are sorted by span, starting with low span at the bottom left corner and moving up and to the right. There doesn't really seem to be any pattern within or across groups. 
+
+```{r plot fusiform mask sISC}
 
 (graph_fusiform[[1]]+graph_fusiform[[2]] + graph_fusiform[[3]]) +
   plot_layout(guides = "collect")+
@@ -810,9 +839,9 @@ for (TR in seq.int(1,14)){
 
 ```
 
-```{r create data we need - fusiform}
+```{r create data we need - fusiform sISC}
 
-z_trans_fusiform <-  atanh(fusiform_sISC_ordered_group)
+z_trans_fusiform <-  atanh(fusiform_ISC_ordered_group)
 z_trans_fusiform[z_trans_fusiform==Inf] <- NA
 z_trans_corr <- z_trans_fusiform
 
@@ -884,7 +913,7 @@ for (TR in seq.int(1:14)){
 
 ``` 
 
-```{r run t tests - fusiform,include=FALSE} 
+```{r run t tests - fusiform sISC,include=FALSE} 
 
 for (TR in seq.int(1,14)){
   
@@ -899,7 +928,7 @@ for (TR in seq.int(1,14)){
 
 All time points are significantly different. 
 
-```{r t test results - fusiform}
+```{r t test results - fusiform sISC}
 
 print(t_test_res_fusiform)
 
@@ -908,7 +937,7 @@ print(t_test_res_fusiform)
 
 Next, we want to take a quick sanity check and see how just averaging across all subjects, but looking within and across groups. We see similar time courses to what we were seeing with the full matrices. It is interesting to note that within subject correlations are higher than across subject ones. 
 
-```{r plot group x time - fusiform}
+```{r plot group x time - fusiform sISC}
 
 plot_temp <- melt(cbind(avg_over_groups_fusiform[["mean"]],time=c(1:14)),id.vars="time")[1:28,]
 se_plot_temp <- melt(cbind(avg_over_groups_fusiform[["se"]],time=c(1:14)),id.vars="time")[1:28,]
@@ -923,7 +952,11 @@ ggplot(data=plot_temp)+
 
 ```
 
-```{r look at correlations across group - fusiform}
+The last analysis didn't take into account the span of the subjects - now we'll look at them. 
+
+Seems as though low capacity subjects show less within group correlation than the other two groups during encoding, but no real differences otherwise. 
+
+```{r look at correlations across group - fusiform sISC}
 
 group_means_fusiform$TR <- c(1:14) 
 group_se_fusiform$TR <- c(1:14) 
@@ -944,34 +977,36 @@ graph
 
 ```
 
-```{r correlate fusiform ISC to other measures}
+If we average over time, there is a super strong correlation between accuracy and average ISC in the fusiform, but we don't see that for any other relationship.  
+
+```{r correlate fusiform sISC to other measures}
 
 data_to_plot <- merge(constructs_fMRI,p200_clinical_zscores, by="PTID")
 data_to_plot <- merge(data_to_plot,p200_data[,c(1,7)])
 
-data_to_plot <- cbind(data_to_plot,overall_avg_sISC_fusiform,overall_avg_sISC_DFR)
+data_to_plot <- cbind(data_to_plot,overall_avg_ISC_fusiform,overall_avg_ISC_DFR)
 
-cor.test(overall_avg_sISC_fusiform,data_to_plot$omnibus_span_no_DFR_MRI)
-cor.test(overall_avg_sISC_fusiform,data_to_plot$XDFR_MRI_ACC_L3)
-cor.test(overall_avg_sISC_fusiform,data_to_plot$WHO_ST_S32)
-cor.test(overall_avg_sISC_fusiform,data_to_plot$BPRS_TOT)
+cor.test(overall_avg_ISC_fusiform,data_to_plot$omnibus_span_no_DFR_MRI)
+cor.test(overall_avg_ISC_fusiform,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(overall_avg_ISC_fusiform,data_to_plot$WHO_ST_S32)
+cor.test(overall_avg_ISC_fusiform,data_to_plot$BPRS_TOT)
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_fusiform,omnibus_span_no_DFR_MRI))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_fusiform,omnibus_span_no_DFR_MRI))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC fusiform vs omnibus span")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_fusiform,XDFR_MRI_ACC_L3))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_fusiform,XDFR_MRI_ACC_L3))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC fusiform vs L3 DFR Acc")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_fusiform,WHO_ST_S32))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_fusiform,WHO_ST_S32))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC fusiform vs WHODAS")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_fusiform,BPRS_TOT))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_fusiform,BPRS_TOT))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC fusiform vs BPRS Total")
@@ -979,32 +1014,30 @@ ggplot(data=data_to_plot,aes(x=overall_avg_sISC_fusiform,BPRS_TOT))+
 
 ```
 
-```{r correlate fusiform ISC to other measures for each time point}
+If we break this down by TR, we see signficant linear relationships between ISC and span at TRs 10 and 11, with WHODAS at TR 10 (but I'm not sure I trust this one...) and accuracy at TRs 1, 2, 4, 5, 6, 7, 10, 11, 12, and 13. 
 
-corr_ISC(avg_sISC_fusiform,data_to_plot[,c(1,7)])
-corr_ISC(avg_sISC_fusiform,data_to_plot[,c(1,8)])
-corr_ISC(avg_sISC_fusiform,data_to_plot[,c(1,14)])
-corr_ISC(avg_sISC_fusiform,data_to_plot[,c(1,20)])
+Overall, it seems that ISC during probe (and a little bit during encoding) is relate to performance and span. 
+
+```{r correlate fusiform sISC to other measures for each time point}
+
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,7)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,8)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,14)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,20)])
+
 
 ```
-
-```{r}
-
-
-
-```
-
 
 ## DFR
 
 The next step is to look at regions that are actually implicated in working memory. 
 
-```{r make correlation matrices - DFR}
+```{r make correlation matrices - DFR sISC}
 
 graph_DFR <- list()
 
 for (TR in seq.int(1,14)){
-  data <- data.frame(DFR_sISC_ordered_group[,,TR])
+  data <- data.frame(DFR_ISC_ordered_group[,,TR])
   rownames(data) <- c(1:168)
   colnames(data) <- c(1:168)
   data %>%
@@ -1038,7 +1071,7 @@ for (TR in seq.int(1,14)){
 
 These correlations are not as strong as the fusiform mask, but we still do see an increase in correlations around TRs 5-6 (during encoding)
 
-```{r plot DFR mask}
+```{r plot DFR mask sISC}
 
 (graph_DFR[[1]]+graph_DFR[[2]] + graph_DFR[[3]]) +
   plot_layout(guides = "collect")+
@@ -1053,9 +1086,9 @@ These correlations are not as strong as the fusiform mask, but we still do see a
 
 ```
 
-```{r create data we need - DFR}
+```{r create data we need - DFR sISC}
 
-z_trans_DFR <-  atanh(DFR_sISC_ordered_group)
+z_trans_DFR <-  atanh(DFR_ISC_ordered_group)
 z_trans_DFR[z_trans_DFR==Inf] <- NA
 z_trans_corr <- z_trans_DFR
 
@@ -1140,7 +1173,7 @@ for (TR in seq.int(1,14)){
 
 All time points are significantly different. 
 
-```{r t test results - DFR}
+```{r t test results - DFR sISC}
 
 print(t_test_res_DFR)
 
@@ -1148,7 +1181,7 @@ print(t_test_res_DFR)
 
 Reflecting that, we're seeing lower correlations, but a similar effect that within group correlations are higher than across group. However, we're not seeing as much of a bump in the probe period, and the peak in the encoding is slightly later than in the fusiform region. 
 
-```{r plot group x time - DFR}
+```{r plot group x time - DFR sISC}
 
 plot_temp <- melt(cbind(avg_over_groups_DFR[["mean"]],time=c(1:14)),id.vars="time")[1:28,]
 se_plot_temp <- melt(cbind(avg_over_groups_DFR[["se"]],time=c(1:14)),id.vars="time")[1:28,]
@@ -1164,7 +1197,7 @@ ggplot(data=plot_temp)+
 
 At the beginning of the probe period, we're starting to see potential differences across groups - it almost looks as though there is higher within subject correlations in the medium and high capacity subjects vs low capacity subjects during the probe period. Will need to do further stats to see if this is statistically significant. 
 
-```{r look at correlations across group - DFR}
+```{r look at correlations across group - DFR sISC}
 
 group_means_DFR$TR <- c(1:14) 
 group_se_DFR$TR <- c(1:14) 
@@ -1187,29 +1220,29 @@ graph
 
 If we take the same plan of attack as before and look at the correlation between ISC averaged over the whole time course and cognitive/clinical measures, we're seeing the same thing - nothing except a very strong correlation with performance. 
 
-```{r correlate DFR ISC to other measures}
+```{r correlate DFR sISC to other measures}
 
-cor.test(overall_avg_sISC_DFR,data_to_plot$omnibus_span_no_DFR_MRI)
-cor.test(overall_avg_sISC_DFR,data_to_plot$XDFR_MRI_ACC_L3)
-cor.test(overall_avg_sISC_DFR,data_to_plot$WHO_ST_S32)
-cor.test(overall_avg_sISC_DFR,data_to_plot$BPRS_TOT)
+cor.test(overall_avg_ISC_DFR,data_to_plot$omnibus_span_no_DFR_MRI)
+cor.test(overall_avg_ISC_DFR,data_to_plot$XDFR_MRI_ACC_L3)
+cor.test(overall_avg_ISC_DFR,data_to_plot$WHO_ST_S32)
+cor.test(overall_avg_ISC_DFR,data_to_plot$BPRS_TOT)
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_DFR,omnibus_span_no_DFR_MRI))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_DFR,omnibus_span_no_DFR_MRI))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC DFR vs omnibus span")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_DFR,XDFR_MRI_ACC_L3))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_DFR,XDFR_MRI_ACC_L3))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC DFR vs L3 DFR Acc")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_DFR,WHO_ST_S32))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_DFR,WHO_ST_S32))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC DFR vs WHODAS")
 
-ggplot(data=data_to_plot,aes(x=overall_avg_sISC_DFR,BPRS_TOT))+
+ggplot(data=data_to_plot,aes(x=overall_avg_ISC_DFR,BPRS_TOT))+
   geom_point()+
   stat_smooth(method="lm")+
   ggtitle("Avg ISC DFR vs BPRS Total")
@@ -1219,12 +1252,11 @@ ggplot(data=data_to_plot,aes(x=overall_avg_sISC_DFR,BPRS_TOT))+
 
 If we break it down by TR, we again see correlations between ISC in the DFR regions and omnibus span at TR 10 and 11, WHODAS at TR 10 (but same concerns as above), and accuracy at TRs 1, 2, 4, 5, 6, 7, 10, 11, 12, and 13.   
 
-```{r compare DFR ISC to measures}
+```{r compare DFR sISC to measures}
 
-corr_ISC(avg_sISC_DFR,data_to_plot[,c(1,7)])
-corr_ISC(avg_sISC_DFR,data_to_plot[,c(1,8)])
-corr_ISC(avg_sISC_DFR,data_to_plot[,c(1,14)])
-corr_ISC(avg_sISC_DFR,data_to_plot[,c(1,20)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,7)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,8)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,14)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,20)])
 
 ```
-
