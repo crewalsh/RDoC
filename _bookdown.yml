@@ -1,0 +1,7 @@
+book_filename: "RDoC_analyses"
+chapter_name: ""
+repo: https://github.com/crewalsh/RDoC
+output_dir: docs
+rmd_files: ["index.Rmd", "p200_behav.Rmd", "p200_linear_corr.Rmd"]
+clean: [packages.bib, bookdown.bbl]
+new_session: yes

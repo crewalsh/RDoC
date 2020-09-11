@@ -4417,3 +4417,18 @@ plot_tertiles(ERSP_fMRI %>% select(c("L_DELAY_LE", "low_beta_cue_F")))
 
 ```
 
+```{r save data for predictions, eval=FALSE, include=FALSE}
+
+save(list=c("alpha_cue_average_Favg", "alpha_cue_average_Oz","alpha_delay_average_Favg", 
+            "alpha_delay_average_Oz", "alpha_probe_average_Favg", "alpha_probe_average_Oz",
+            "beta_cue_average_Favg", "beta_cue_average_Oz", "beta_delay_average_Favg", "beta_delay_average_Oz", 
+            "beta_probe_average_Favg", "beta_probe_average_Oz","theta_cue_average_Favg", "theta_cue_average_Oz", 
+            "theta_delay_average_Favg", "theta_delay_average_Oz", "theta_probe_average_Favg", 
+            "theta_probe_average_Oz","low_gamma_cue_average_Favg", "low_gamma_cue_average_Oz",
+            "low_gamma_delay_average_Favg", "low_gamma_delay_average_Oz", "low_gamma_probe_average_Favg",
+            "low_gamma_probe_average_Oz","cue_average_O_n170", "probe_average_O_n170", "cue_average_P3", 
+            "probe_average_P3", "CDA"), 
+     file = "~/Documents/Code/RDoC_for_GitHub/data/EEG_for_PCs.RData")
+
+```
+

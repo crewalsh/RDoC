@@ -35,6 +35,7 @@ library(patchwork)
 library(MASS)
 library(caret)
 library(glmnet)
+library(tidymodels)
 
 load('data/behav.RData')
 load('data/structural_measures.RData')
@@ -313,9 +314,9 @@ data_for_reg <- data_for_reg[,c(2:111,1)]
 
 ```{r make one df for EEG measures}
 
-name_list <- c("alpha_cue_midOccip", "alpha_cue_Favg", "alpha_cue_Oz", "alpha_delay_midOccip", "alpha_delay_Favg", "alpha_delay_Oz", "alpha_probe_midOccip", "alpha_probe_Favg", "alpha_probe_Oz", "beta_cue_midOccip", "beta_cue_Favg", "beta_cue_Oz", "beta_delay_midOccip", "beta_delay_Favg", "beta_delay_Oz", "beta_probe_midOccip", "beta_probe_Favg", "beta_probe_Oz", "theta_cue_midOccip", "theta_cue_Favg", "theta_cue_Oz", "theta_delay_midOccip", "theta_delay_Favg", "theta_delay_Oz", "theta_probe_midOccip", "theta_probe_Favg", "theta_probe_Oz", "low_gamma_cue_midOccip", "low_gamma_cue_Favg", "low_gamma_cue_Oz", "low_gamma_delay_midOccip", "low_gamma_delay_Favg", "low_gamma_delay_Oz", "low_gamma_probe_midOccip", "low_gamma_probe_Favg", "low_gamma_probe_Oz", "cue_midOccip_n170", "probe_midOccip_n170", "cue_P3", "probe_P3")
+name_list <- c("alpha_cue_Favg", "alpha_cue_Oz", "alpha_delay_Favg", "alpha_delay_Oz",  "alpha_probe_Favg", "alpha_probe_Oz", "beta_cue_Favg", "beta_cue_Oz", "beta_delay_Favg", "beta_delay_Oz", "beta_probe_Favg", "beta_probe_Oz",  "theta_cue_Favg", "theta_cue_Oz",  "theta_delay_Favg", "theta_delay_Oz", "theta_probe_Favg", "theta_probe_Oz", "low_gamma_cue_Favg", "low_gamma_cue_Oz",  "low_gamma_delay_Favg", "low_gamma_delay_Oz",  "low_gamma_probe_Favg", "low_gamma_probe_Oz", "cue_O_n170", "probe_O_n170", "cue_P3", "probe_P3")
 
-EEG_list <- list(alpha_cue_average_midOccip, alpha_cue_average_Favg, alpha_cue_average_Oz,alpha_delay_average_midOccip, alpha_delay_average_Favg, alpha_delay_average_Oz, alpha_probe_average_midOccip, alpha_probe_average_Favg, alpha_probe_average_Oz,beta_cue_average_midOccip, beta_cue_average_Favg, beta_cue_average_Oz,beta_delay_average_midOccip, beta_delay_average_Favg, beta_delay_average_Oz, beta_probe_average_midOccip, beta_probe_average_Favg, beta_probe_average_Oz,theta_cue_average_midOccip, theta_cue_average_Favg, theta_cue_average_Oz,theta_delay_average_midOccip, theta_delay_average_Favg, theta_delay_average_Oz, theta_probe_average_midOccip, theta_probe_average_Favg, theta_probe_average_Oz,low_gamma_cue_average_midOccip, low_gamma_cue_average_Favg, low_gamma_cue_average_Oz,low_gamma_delay_average_midOccip, low_gamma_delay_average_Favg, low_gamma_delay_average_Oz, low_gamma_probe_average_midOccip, low_gamma_probe_average_Favg, low_gamma_probe_average_Oz,cue_average_midOccip_n170, probe_average_midOccip_n170, cue_average_P3, probe_average_P3 )
+EEG_list <- list(alpha_cue_average_Favg, alpha_cue_average_Oz,alpha_delay_average_Favg, alpha_delay_average_Oz, alpha_probe_average_Favg, alpha_probe_average_Oz,beta_cue_average_Favg, beta_cue_average_Oz, beta_delay_average_Favg, beta_delay_average_Oz, beta_probe_average_Favg, beta_probe_average_Oz,theta_cue_average_Favg, theta_cue_average_Oz, theta_delay_average_Favg, theta_delay_average_Oz, theta_probe_average_Favg, theta_probe_average_Oz,low_gamma_cue_average_Favg, low_gamma_cue_average_Oz,low_gamma_delay_average_Favg, low_gamma_delay_average_Oz,  low_gamma_probe_average_Favg, low_gamma_probe_average_Oz,cue_average_O_n170, probe_average_O_n170, cue_average_P3, probe_average_P3 )
 
 for (idx in seq.int(1,length(EEG_list))){
   colnames(EEG_list[[idx]])[2:3] <- paste0(name_list[idx],"_",colnames(EEG_list[[idx]][2:3]),sep="") 
@@ -334,10 +335,11 @@ colnames(aparc_RH_MTHICK)[2:37] <- paste0(colnames(aparc_RH_MTHICK)[2:37],"_RH",
 colnames(FA_Data)[1] <- "ID"
 
 struc_df <- Reduce(function(x,y) merge(x = x, y = y, by="ID"),
-                   list(aparc_LH_MTHICK, aparc_RH_MTHICK,aseg, FA_Data))
+                   list(aparc_LH_MTHICK, aparc_RH_MTHICK,aseg))
+
 # remove STD from FA 
-struc_df <- struc_df[,1:116]
-struc_df <- data.frame(struc_df)
+FA_Data <- FA_Data[,1:21]
+FA_Data <- data.frame(FA_Data)
 
 
 ```
@@ -464,7 +466,7 @@ fviz_eig(res_sim.pca)
 summary(res_sim.pca)
 
 res_sim.var <- get_pca_var(res_sim.pca)
-res_sim.var$contrib      # Contributions to the PCs
+#res_sim.var$contrib      # Contributions to the PCs
 
 for (axis in seq.int(1,5)){
   print(fviz_contrib(res_sim.pca, choice = "var", axes = axis, top = 10))
@@ -522,39 +524,38 @@ fviz_pca_var(res_MVPA.pca,
 
 ## Structural Data
 
-For the structural data, we see that 20 PCs are necessary to explain 75% of the variance. There was a lot of overlap in these, so it was kind of tough to describe/classify them 
+For the structural data, we see that 19 PCs are necessary to explain 75% of the variance. There was a lot of overlap in these, so it was kind of tough to describe/classify them 
 
-_PC1:_ Parietal lobe structures 
-_PC2:_ FA measures 
-_PC3:_ subcortical; cerebellum, hippocampus
-_PC4:_ Cuneus, pericalcarine, superior parietal, lingual 
-_PC5:_ Temporal pole, entorhinal 
-_PC6:_ Pericalcarine, lateral occipital 
-_PC7:_ corpus callosum, caudate
-_PC8:_ Temporal, parahippocampal, FA 
-_PC9:_ Frontal pole, corpus callosum and corpus callosum 
+_PC1:_ Parietal lobe structures and some superior frontal structures
+_PC2:_ Subcortical structures (including cerebellum)
+_PC3:_ Cuneus, pericalcarine, superior parietal, lingual 
+_PC4:_ Temporal pole, entorhinal 
+_PC5:_ Lingual, perihippocampal, pericalcarine
+_PC6:_ corpus callosum, caudate
+_PC7:_ More subcortical
+_PC8:_ Frontal pole (and other frontal regions)
+_PC9:_ corpus callosum, hippocampus and surrounding regions
 _PC10:_ Cerebellum, frontal 
-_PC11:_ Corpus callosum, cerebellum, cingulum/HPC connection
-_PC12:_ Parahippocampal and lateral occipital 
-_PC13:_ L HPC, HPC/cingulum connection 
-_PC14:_ corticospinal tract, cingulum, pars triangularis 
-_PC15:_ caudal anterior cingulate, transverse temporal 
-_PC16:_ Accumbens, HPC
-_PC17:_ subcortical structures 
-_PC18:_ Cingulate, subcortical 
-_PC19:_ lateral orbitofrontal poles 
-_PC20:_ Longitudinal fasciculus 
+_PC11:_ Parahippocampal and lateral occipital 
+_PC12:_ Temporal, entorhinal, parahippocampal
+_PC13:_ Temporal pole, temporal cortex, amygdala and HPC
+_PC14:_ pars orbitalis, cingulate, accumbens
+_PC15:_ left hemisphere subcortical, pars triangularis
+_PC16:_ Temporal, orbitofrontal , frontal pole
+_PC17:_ banks sts, some temporal and parietal cortex
+_PC18:_ Cingulate, frontal
+_PC19:_ HPC, lateral orbitofrontal poles 
 
 ```{r pca for structural data}
 
-res_struct.pca <- prcomp(struc_df[,c(4:37, 40:116)], scale = TRUE)
+res_struct.pca <- prcomp(struc_df[,c(4:37, 40:96)], scale = TRUE)
 fviz_eig(res_struct.pca)
 
 summary(res_struct.pca)
 
 res_struct.var <- get_pca_var(res_struct.pca)
 
-for (axis in seq.int(1,20)){
+for (axis in seq.int(1,19)){
   print(fviz_contrib(res_struct.pca, choice = "var", axes = axis, top = 10))
 }
 
@@ -568,34 +569,65 @@ fviz_pca_var(res_struct.pca,
 
 ```
 
+## FA data 
+
+For the FA data, we need 5 PCs to explain 75% of the variance: 
+
+_PC1:_ Inferior frontal occipital fasiculus, forceps, anterior thalamic radiation (but really captures a lot of variance from a lot of structures)
+_PC2:_ Cingulum/hippocampus 
+_PC3:_ cingulum 
+_PC4:_ Superior longitudinal fasiculus in temporal lobe in the left hemisphere and cortcospinal tract 
+_PC5:_ Superior longitudinal fasiculus in temporal lobe in the right hemisphere and cingulum
+
+```{r pca for FA data}
+
+res_FA.pca <- prcomp(FA_Data[,2:21], scale = TRUE)
+fviz_eig(res_FA.pca)
+
+summary(res_FA.pca)
+
+res_FA.var <- get_pca_var(res_FA.pca)
+
+for (axis in seq.int(1,5)){
+  print(fviz_contrib(res_FA.pca, choice = "var", axes = axis, top = 10))
+}
+
+fviz_pca_var(res_FA.pca,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+)
+
+
+
+```
+
 ## EEG Data
 
-For the EEG data, we see that 13 PCs are necessary to explain 75% of the variance. 
+For the EEG data, we see that 11 PCs are necessary to explain 75% of the variance. 
 
 _PC1:_ Alpha and beta at high load during probe 
 _PC2:_ ERSPs at probe during low load trials; specifically, low gamma  
-_PC3:_ Alpha power at delay, beta during cue 
+_PC3:_ Alpha and beta power at delay, cue P3
 _PC4:_ Low gamma 
-_PC5:_ Theta power 
-_PC6:_ N170 amplitude and high load Oz power across frequency band 
-_PC7:_ P3, n170 amplitude; low gamma 
-_PC8:_ Low gamma in mid occipital component 
+_PC5:_ Theta power, n170 amplitude
+_PC6:_ Theta power during cue, probe P3 
+_PC7:_ CDA across lower load conditions (mostly 1 dot, some 3 dots), P3
+_PC8:_ CDA across higher load conditions (mostly 5 dot, some 3 dots), n170 at high load
 _PC9:_ P3 component
-_PC10:_ CDA - 1 dot condition 
-_PC11:_ Oz at low load, mid occipital at high load 
-_PC12:_ CDA - 5 dot condition; low gamma power 
-_PC13:_ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load 
+_PC10:_ CDA - 5 dot condition has the most variance, really a mix 
+_PC11:_ CDA - 1 dot condition and also 5 dot condition (but high load has less contributions)
 
 ```{r pca for EEG data}
 
-res_EEG.pca <- prcomp(EEG_df[complete.cases(EEG_df),2:90], scale = TRUE)
+res_EEG.pca <- prcomp(EEG_df[complete.cases(EEG_df),2:66], scale = TRUE)
 fviz_eig(res_EEG.pca)
 
 summary(res_EEG.pca)
 
 res_EEG.var <- get_pca_var(res_EEG.pca)
 
-for (axis in seq.int(1,13)){
+for (axis in seq.int(1,11)){
   print(fviz_contrib(res_EEG.pca, choice = "var", axes = axis, top = 10))
 }
 
@@ -697,38 +729,29 @@ sim_PCs <- data.frame(PTID = constructs_fMRI$PTID, res_sim.pca[["x"]][,1:5])
 colnames(sim_PCs)[2:6] <- paste("PC",c(1:5),"_sim",sep="")
 MVPA_PCs <- data.frame(PTID = constructs_fMRI$PTID, res_MVPA.pca[["x"]][,1:12])
 colnames(MVPA_PCs)[2:13] <- paste("PC",c(1:12),"_MVPA",sep="")
-EEG_PCs <- data.frame(PTID = EEG_df$PTID[complete.cases(EEG_df)], res_EEG.pca[["x"]][,1:13])
-colnames(EEG_PCs)[2:14] <- paste("PC",c(1:13),"_EEG",sep="")
+EEG_PCs <- data.frame(PTID = EEG_df$PTID[complete.cases(EEG_df)], res_EEG.pca[["x"]][,1:11])
+colnames(EEG_PCs)[2:12] <- paste("PC",c(1:11),"_EEG",sep="")
 RS_PCs <- data.frame(PTID = RS_df$PTID, res_RS.pca[["x"]][,1:8])
 colnames(RS_PCs)[2:9] <- paste("PC",c(1:8),"_RS",sep="")
-struc_PCs <- data.frame(PTID=struc_df$ID, res_struct.pca[["x"]][,1:20])
-colnames(struc_PCs)[2:21] <- paste("PC",c(1:20),"_struc",sep="")
+struc_PCs <- data.frame(PTID=struc_df$ID, res_struct.pca[["x"]][,1:19])
+colnames(struc_PCs)[2:20] <- paste("PC",c(1:19),"_struc",sep="")
+FA_PCs <- data.frame(PTID = FA_Data$ID, res_FA.pca[["x"]][,1:5])
+colnames(FA_PCs)[2:6] <- paste("PC", c(1:5), "_FA", sep="")
 
 reg_data <- Reduce(function(x,y) merge(x=x, y=y, by = "PTID", all.x = TRUE), 
-                   list(reg_data, univ_PCs, sim_PCs, MVPA_PCs, EEG_PCs, RS_PCs, struc_PCs))
+                   list(reg_data, univ_PCs, sim_PCs, MVPA_PCs, EEG_PCs, RS_PCs, struc_PCs, FA_PCs))
 
-#add scanner, age, gender (won't include CS/NCS in regression)
+#add scanner, age, gender (won't include CS/NCS in regression) and dummy code 
 reg_data <- merge(reg_data, p200_demographics, by = "PTID")
+reg_data$SCANNER <- reg_data$SCANNER - 1
+reg_data$GROUP <- reg_data$GROUP - 1
+
+reg_data <- reg_data[complete.cases(reg_data),]
 
 set.seed(123)
-```
-
-```{r prep data - predict span}
-training.samples_span <- reg_data$span %>%
-  createDataPartition(p = 0.8, list = FALSE)
-train.data_span  <- reg_data[training.samples_span, c(2, 5:68)]
-train.data_span.impute <- preProcess(train.data_span, method="knnImpute")
-train.data_span <- predict(train.data_span.impute, train.data_span)
-test.data_span <- reg_data[-training.samples_span, c(2, 5:68)]
-
-# standardize, because that is important for ridge regression 
-test.data_span <- sapply(test.data_span, scale)
-test.data_span <- data.frame(test.data_span)
-
 lambda <- 10^seq(-3, 3, length = 100)
-
-
 ```
+
 
 ## Stepwise Regression 
 
@@ -762,42 +785,98 @@ While the final stepwise model is significant overall, we see significant effect
 
 ```{r stepwise - span}
 
-step.span <- train(span ~., data = train.data_span,
-                   method = "lmStepAIC", 
-                   trControl = trainControl("cv", number = 10, savePredictions = "all"),
-                   trace = FALSE
-)
-# Model accuracy
-step.span$results
-predictions.step.span <- step.span %>% predict(test.data_span)
-# Final model coefficients
-step.span$finalModel
-# Summary of the model
-summary(step.span$finalModel)
-Rsquared_step.span <- calc_r_squared(step.span, predictions.step.span, test.data_span$span)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
 
+best_models_step_span <- list()
+RMSE_cv_step_span <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(2, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(2, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  step.span <- train(span ~., data = train_data,
+                     method = "lmStepAIC", 
+                     trControl = trainControl("cv", number = 10),
+                     trace = FALSE
+  )
+  best_models_step_span[[fold]] <- step.span$finalModel
+  preds <- step.span %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_step_span <- data.frame(true = test_data$span, pred = preds)
+  }else{ 
+    cv_preds_step_span <- rbind(cv_preds_step_span, data.frame(true = test_data$span, pred = preds))}
+  
+  RMSE_cv_step_span[fold] <- RMSE(preds, test_data$span)
+  
+}
 
 ```
+
+```{r create comparisons - span}
+
+compare_span <- data.frame(matrix(nrow=2, ncol=4))
+colnames(compare_span) <- c("stepwise", "ridge", "lasso", "elastic")
+rownames(compare_span) <- c("RMSE", "Rsquared")
+
+compare_span$stepwise[1] <- rowMeans(RMSE_cv_step_span)
+compare_span$stepwise[2] <- cor(cv_preds_step_span$true, cv_preds_step_span$pred)^2
+
+```
+
 
 ## Ridge Regression 
 
 ```{r ridge - span}
 
-ridge.span <- train(
-  span ~., data = train.data_span, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
-)
-# Model coefficients
-coef(ridge.span$finalModel, ridge.span$bestTune$lambda)
-# Make predictions
-predictions.ridge.span <- ridge.span %>% predict(test.data_span)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.ridge.span, test.data_span$span),
-  Rsquare = calc_r_squared(ridge.span, predictions.ridge.span, test.data_span$span)
-  #Rsquare = R2(predictions.ridge.span, test.data_span$span)
-)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_ridge_span <- list()
+RMSE_cv_ridge_span <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(2, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(2, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  ridge.span <- train(
+    span ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+  )
+  best_models_ridge_span[[fold]] <- coef(ridge.span$finalModel, ridge.span$bestTune$lambda)
+  preds <- ridge.span %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_ridge_span <- data.frame(true = test_data$span, pred = preds)
+  }else{ 
+    cv_preds_ridge_span <- rbind(cv_preds_ridge_span, data.frame(true = test_data$span, pred = preds))}
+  
+  RMSE_cv_ridge_span[fold] <- RMSE(preds, test_data$span)
+  
+}
+
+compare_span$ridge[1] <- rowMeans(RMSE_cv_ridge_span)
+compare_span$ridge[2] <- cor(cv_preds_ridge_span$true, cv_preds_ridge_span$pred)^2
+
 
 ```
 
@@ -847,20 +926,44 @@ In the LASSO regression, we see:
 
 ```{r lasso - span}
 
-lasso.span <- train(
-  span ~., data = train.data_span, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 1, lambda = lambda)
-)
-# Model coefficients
-coef(lasso.span$finalModel, lasso.span$bestTune$lambda)
-# Make predictions
-predictions.lasso.span <- lasso.span %>% predict(test.data_span)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.lasso.span, test.data_span$span),
-  Rsquare = calc_r_squared(lasso.span, predictions.lasso.span, test.data_span$span)
-)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_lasso_span <- list()
+RMSE_cv_lasso_span <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(2, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(2, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  lasso.span <- train(
+    span ~., data =train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 1, lambda = lambda)
+  )
+  best_models_lasso_span[[fold]] <- coef(lasso.span$finalModel, lasso.span$bestTune$lambda)
+  preds <- lasso.span %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_lasso_span <- data.frame(true = test_data$span, pred = preds)
+  }else{ 
+    cv_preds_lasso_span <- rbind(cv_preds_lasso_span, data.frame(true = test_data$span, pred = preds))}
+  
+  RMSE_cv_lasso_span[fold] <- RMSE(preds, test_data$span)
+  
+}
+
+compare_span$lasso[1] <- rowMeans(RMSE_cv_lasso_span)
+compare_span$lasso[2] <- cor(cv_preds_lasso_span$true, cv_preds_lasso_span$pred)^2
+
 
 ```
 
@@ -915,33 +1018,53 @@ data.frame(
 
 ```{r elastic net - span}
 
-elastic.span <- train(
-  span ~., data = train.data_span, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneLength = 10
-)
-# Model coefficients
-coef(elastic.span$finalModel, elastic.span$bestTune$lambda)
-# Make predictions
-predictions.elastic.span <- elastic.span %>% predict(test.data_span)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.elastic.span, test.data_span$span),
-  Rsquare = calc_r_squared(elastic.span, predictions.elastic.span, test.data_span$span)
-)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_elastic_span <- list()
+RMSE_cv_elastic_span <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(2, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(2, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  elastic.span <- train(
+    span ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneLength = 10
+  )
+  best_models_elastic_span[[fold]] <- elastic.span$finalModel
+  preds <- elastic.span %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_elastic_span <- data.frame(true = test_data$span, pred = preds)
+  }else{ 
+    cv_preds_elastic_span <- rbind(cv_preds_elastic_span, data.frame(true = test_data$span, pred = preds))}
+  
+  RMSE_cv_elastic_span[fold] <- RMSE(preds, test_data$span)
+  
+}
+
+compare_span$elastic[1] <- rowMeans(RMSE_cv_elastic_span)
+compare_span$elastic[2] <- cor(cv_preds_elastic_span$true, cv_preds_elastic_span$pred)^2
+
 ```
 
 ## Compare Models
 
-When comparing models, ridge regression looks to be our best model - it explains 20% of the variance and the lowest error. Stepwise regression explains the same amount of variance, but has a higher RMSE. 
+When comparing models, ElasticNet is our best model, explaining ~9% of the variance. 
 
 ```{r compare models - span}
-
-models.span <- list(ridge = ridge.span, lasso = lasso.span, elastic = elastic.span, stepwise = step.span)
-resamples(models.span) %>% summary( metric = "RMSE")
-
-resamples(models.span) %>% summary( metric = "Rsquared")
-
+compare_span
 ```
 
 # Predicting BPRS
@@ -954,27 +1077,6 @@ If we look across models, the only things that are shared are:
 + __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
 + Scanner 
 
-## Prep data
-
-```{r prep data - predict BPRS}
-
-set.seed(123)
-
-training.samples_BPRS <- reg_data$BPRS %>%
-  createDataPartition(p = 0.8, list = FALSE)
-train.data_BPRS  <- reg_data[training.samples_BPRS, c(4, 5:68)]
-train.data_BPRS.impute <- preProcess(train.data_BPRS, method="knnImpute")
-train.data_BPRS <- predict(train.data_BPRS.impute, train.data_BPRS)
-test.data_BPRS <- reg_data[-training.samples_BPRS, c(4, 5:68)]
-
-# standardize, because that is important for ridge regression 
-test.data_BPRS <- sapply(test.data_BPRS, scale)
-test.data_BPRS <- data.frame(test.data_BPRS)
-
-lambda <- 10^seq(-3, 3, length = 100)
-
-
-```
 
 ## Stepwise regression
 
@@ -998,17 +1100,52 @@ To predict BPRS, we see the PCs that contain important information are:
 
 ```{r stepwise - BPRS}
 
-step.BPRS <- train(BPRS ~., data = train.data_BPRS,
-                   method = "lmStepAIC", 
-                   trControl = trainControl("cv", number = 10, savePredictions = "all"),
-                   trace = FALSE
-)
-# Model accuracy
-step.BPRS$results
-# Final model coefficients
-step.BPRS$finalModel
-# Summary of the model
-summary(step.BPRS$finalModel)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_step_BPRS <- list()
+RMSE_cv_step_BPRS <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(4, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(4, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  step.BPRS <- train(BPRS ~., data = train_data,
+                     method = "lmStepAIC", 
+                     trControl = trainControl("cv", number = 10),
+                     trace = FALSE
+  )
+  best_models_step_BPRS[[fold]] <- step.BPRS$finalModel
+  preds <- step.BPRS %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_step_BPRS <- data.frame(true = test_data$BPRS, pred = preds)
+  }else{ 
+    cv_preds_step_BPRS <- rbind(cv_preds_step_BPRS, data.frame(true = test_data$BPRS, pred = preds))}
+  
+  RMSE_cv_step_BPRS[fold] <- RMSE(preds, test_data$BPRS)
+  
+}
+
+```
+
+```{r create comparisons - BPRS}
+
+compare_BPRS <- data.frame(matrix(nrow=2, ncol=4))
+colnames(compare_BPRS) <- c("stepwise", "ridge", "lasso", "elastic")
+rownames(compare_BPRS) <- c("RMSE", "Rsquared")
+
+compare_BPRS$stepwise[1] <- rowMeans(RMSE_cv_step_BPRS)
+compare_BPRS$stepwise[2] <- cor(cv_preds_step_BPRS$true, cv_preds_step_BPRS$pred)^2
 
 ```
 
@@ -1016,22 +1153,44 @@ summary(step.BPRS$finalModel)
 
 ```{r ridge - BPRS}
 
-ridge.BPRS <- train(
-  BPRS ~., data = train.data_BPRS, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
-)
-# Model coefficients
-coef(ridge.BPRS$finalModel, ridge.BPRS$bestTune$lambda)
-# Make predictions
-predictions.ridge.BPRS <- ridge.BPRS %>% predict(test.data_BPRS)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.ridge.BPRS, test.data_BPRS$BPRS),
-  #Rsquare = R2(predictions.ridge.BPRS, test.data_BPRS$BPRS)
-  Rsquare = calc_r_squared(ridge.BPRS, predictions.ridge.BPRS, test.data_BPRS$BPRS)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_ridge_BPRS <- list()
+RMSE_cv_ridge_BPRS <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(4, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(4, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  ridge.BPRS <- train(
+    BPRS ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+  )
+  best_models_ridge_BPRS[[fold]] <- coef(ridge.BPRS$finalModel, ridge.BPRS$bestTune$lambda)
+  preds <- ridge.BPRS %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_ridge_BPRS <- data.frame(true = test_data$BPRS, pred = preds)
+  }else{ 
+    cv_preds_ridge_BPRS <- rbind(cv_preds_ridge_BPRS, data.frame(true = test_data$BPRS, pred = preds))}
+  
+  RMSE_cv_ridge_BPRS[fold] <- RMSE(preds, test_data$BPRS)
+  
+}
+
+compare_BPRS$ridge[1] <- rowMeans(RMSE_cv_ridge_BPRS)
+compare_BPRS$ridge[2] <- cor(cv_preds_ridge_BPRS$true, cv_preds_ridge_BPRS$pred)^2
+
 ```
 
 ## LASSO Regression
@@ -1047,22 +1206,44 @@ LASSO gives us almost a combination of the above analyses:
 
 ```{r lasso - BPRS}
 
-lasso.BPRS <- train(
-  BPRS ~., data = train.data_BPRS, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 1, lambda = lambda)
-)
-# Model coefficients
-coef(lasso.BPRS$finalModel, lasso.BPRS$bestTune$lambda)
-# Make predictions
-predictions.lasso.BPRS <- lasso.BPRS %>% predict(test.data_BPRS)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.lasso.BPRS, test.data_BPRS$BPRS),
-  #Rsquare = R2(predictions.lasso.BPRS, test.data_BPRS$BPRS)
-  Rsquare = calc_r_squared(lasso.BPRS, predictions.lasso.BPRS, test.data_BPRS$BPRS)
+
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_lasso_BPRS <- list()
+RMSE_cv_lasso_BPRS <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(4, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(4, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  lasso.BPRS <- train(
+    BPRS ~., data =train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 1, lambda = lambda)
+  )
+  best_models_lasso_BPRS[[fold]] <- coef(lasso.BPRS$finalModel, lasso.BPRS$bestTune$lambda)
+  preds <- lasso.BPRS %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_lasso_BPRS <- data.frame(true = test_data$BPRS, pred = preds)
+  }else{ 
+    cv_preds_lasso_BPRS <- rbind(cv_preds_lasso_BPRS, data.frame(true = test_data$BPRS, pred = preds))}
+  
+  RMSE_cv_lasso_BPRS[fold] <- RMSE(preds, test_data$BPRS)
+  
+}
+
+compare_BPRS$lasso[1] <- rowMeans(RMSE_cv_lasso_BPRS)
+compare_BPRS$lasso[2] <- cor(cv_preds_lasso_BPRS$true, cv_preds_lasso_BPRS$pred)^2
 
 ```
 
@@ -1116,37 +1297,55 @@ data.frame(
 + Scanner
 
 ```{r elastic net - BPRS}
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
 
-elastic.BPRS <- train(
-  BPRS ~., data = train.data_BPRS, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneLength = 10
-)
-# Model coefficients
-coef(elastic.BPRS$finalModel, elastic.BPRS$bestTune$lambda)
-# Make predictions
-predictions.elastic.BPRS <- elastic.BPRS %>% predict(test.data_BPRS)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.elastic.BPRS, test.data_BPRS$BPRS),
-  #Rsquare = R2(predictions.elastic.BPRS, test.data_BPRS$BPRS)
-  Rsquare = calc_r_squared(elastic.BPRS, predictions.elastic.BPRS, test.data_BPRS$BPRS)
+best_models_elastic_BPRS <- list()
+RMSE_cv_elastic_BPRS <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(4, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(4, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  elastic.BPRS <- train(
+    BPRS ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneLength = 10
+  )
+  best_models_elastic_BPRS[[fold]] <- elastic.BPRS$finalModel
+  preds <- elastic.BPRS %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_elastic_BPRS <- data.frame(true = test_data$BPRS, pred = preds)
+  }else{ 
+    cv_preds_elastic_BPRS <- rbind(cv_preds_elastic_BPRS, data.frame(true = test_data$BPRS, pred = preds))}
+  
+  RMSE_cv_elastic_BPRS[fold] <- RMSE(preds, test_data$BPRS)
+  
+}
+
+compare_BPRS$elastic[1] <- rowMeans(RMSE_cv_elastic_BPRS)
+compare_BPRS$elastic[2] <- cor(cv_preds_elastic_BPRS$true, cv_preds_elastic_BPRS$pred)^2
+
+
 ```
 
 ## Compare Models
 
-These models can explain less variance than in span - only about 6-12%. Just as with span, ridge regression is the best model. 
+Again, ElasticNet is our best model, explaining 15% of the variance with the lowest RMSE. 
 
 ```{r compare models - BPRS}
 
-models.BPRS <- list(ridge = ridge.BPRS, lasso = lasso.BPRS, elastic = elastic.BPRS, stepwise = step.BPRS)
-resamples(models.BPRS) %>% summary( metric = "RMSE")
-
-resamples(models.BPRS) %>% summary( metric = "Rsquared")
-
-
+compare_BPRS
 ```
 
 # Predicting Accuracy 
@@ -1160,27 +1359,6 @@ resamples(models.BPRS) %>% summary( metric = "Rsquared")
 + __PC15_struct:__ caudal anterior cingulate, transverse temporal 
 
 There are fewer things that are related to accuracy, and these seem to relate to the activity in the fusiform/other visual measures and performance measures at high load conditions. Interestingly, none of the components related to accuracy across all models come from resting state or similarity measures.
-
-## Prep data
-
-```{r prep data - predict high_acc}
-
-set.seed(123)
-
-training.samples_high_acc <- reg_data$high_acc %>%
-  createDataPartition(p = 0.8, list = FALSE)
-train.data_high_acc  <- reg_data[training.samples_high_acc, c(3, 5:68)]
-train.data_high_acc.impute <- preProcess(train.data_high_acc, method="knnImpute")
-train.data_high_acc <- predict(train.data_high_acc.impute, train.data_high_acc)
-test.data_high_acc <- reg_data[-training.samples_high_acc, c(3, 5:68)]
-
-test.data_high_acc <- sapply(test.data_high_acc, scale)
-test.data_high_acc <- data.frame(test.data_high_acc)
-
-lambda <- 10^seq(-3, 3, length = 100)
-
-
-```
 
 ## Stepwise regression
 
@@ -1197,17 +1375,52 @@ lambda <- 10^seq(-3, 3, length = 100)
 
 ```{r stepwise - high acc}
 
-step.high_acc <- train(high_acc ~., data = train.data_high_acc,
-                       method = "lmStepAIC", 
-                       trControl = trainControl("cv", number = 10, savePredictions = "all"),
-                       trace = FALSE
-)
-# Model accuracy
-step.high_acc$results
-# Final model coefficients
-step.high_acc$finalModel
-# Summary of the model
-summary(step.high_acc$finalModel)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_step_high_acc <- list()
+RMSE_cv_step_high_acc <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
+  
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(3, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(3, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  step.high_acc <- train(high_acc ~., data = train_data,
+                     method = "lmStepAIC", 
+                     trControl = trainControl("cv", number = 10),
+                     trace = FALSE
+  )
+  best_models_step_high_acc[[fold]] <- step.high_acc$finalModel
+  preds <- step.high_acc %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_step_high_acc <- data.frame(true = test_data$high_acc, pred = preds)
+  }else{ 
+    cv_preds_step_high_acc <- rbind(cv_preds_step_high_acc, data.frame(true = test_data$high_acc, pred = preds))}
+  
+  RMSE_cv_step_high_acc[fold] <- RMSE(preds, test_data$high_acc)
+  
+}
+
+```
+
+```{r create comparisons - high_acc}
+
+compare_high_acc <- data.frame(matrix(nrow=2, ncol=4))
+colnames(compare_high_acc) <- c("stepwise", "ridge", "lasso", "elastic")
+rownames(compare_high_acc) <- c("RMSE", "Rsquared")
+
+compare_high_acc$stepwise[1] <- rowMeans(RMSE_cv_step_high_acc)
+compare_high_acc$stepwise[2] <- cor(cv_preds_high_acc$true, cv_preds_high_acc$pred)^2
 
 ```
 
@@ -1215,22 +1428,45 @@ summary(step.high_acc$finalModel)
 
 ```{r ridge - high_acc}
 
-ridge.high_acc <- train(
-  high_acc ~., data = train.data_high_acc, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
-)
-# Model coefficients
-coef(ridge.high_acc$finalModel, ridge.high_acc$bestTune$lambda)
-# Make predictions
-predictions.ridge.high_acc <- ridge.high_acc %>% predict(test.data_high_acc)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.ridge.high_acc, test.data_high_acc$high_acc),
-  #Rsquare = R2(predictions.ridge.high_acc, test.data_high_acc$high_acc)
-  Rsquare = calc_r_squared(ridge.high_acc, predictions.ridge.high_acc, test.data_high_acc$high_acc)
+
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_ridge_high_acc <- list()
+RMSE_cv_high_acc <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(3, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(3, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  ridge.high_acc <- train(
+    high_acc ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+  )
+  best_models_ridge_high_acc[[fold]] <- coef(ridge.high_acc$finalModel, ridge.high_acc$bestTune$lambda)
+  preds <- ridge.high_acc %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_high_acc <- data.frame(true = test_data$high_acc, pred = preds)
+  }else{ 
+    cv_preds_high_acc <- rbind(cv_preds_high_acc, data.frame(true = test_data$high_acc, pred = preds))}
+  
+  RMSE_cv_high_acc[fold] <- RMSE(preds, test_data$high_acc)
+  
+}
+
+compare_high_acc$ridge[1] <- rowMeans(RMSE_cv_high_acc)
+compare_high_acc$ridge[2] <- cor(cv_preds_high_acc$true, cv_preds_high_acc$pred)^2
+
 ```
 
 ## LASSO Regression
@@ -1261,22 +1497,44 @@ data.frame(
 
 ```{r lasso - high_acc}
 
-lasso.high_acc <- train(
-  high_acc ~., data = train.data_high_acc, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneGrid = expand.grid(alpha = 1, lambda = lambda)
-)
-# Model coefficients
-coef(lasso.high_acc$finalModel, lasso.high_acc$bestTune$lambda)
-# Make predictions
-predictions.lasso.high_acc <- lasso.high_acc %>% predict(test.data_high_acc)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.lasso.high_acc, test.data_high_acc$high_acc),
-  #Rsquare = R2(predictions.lasso.high_acc, test.data_high_acc$high_acc)
-  Rsquare = calc_r_squared(lasso.high_acc, predictions.lasso.high_acc, test.data_high_acc$high_acc)
+
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_lasso_high_acc <- list()
+RMSE_cv_lasso_high_acc <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(3, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(3, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  lasso.high_acc <- train(
+    high_acc ~., data =train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneGrid = expand.grid(alpha = 1, lambda = lambda)
+  )
+  best_models_lasso_high_acc[[fold]] <- coef(lasso.high_acc$finalModel, lasso.high_acc$bestTune$lambda)
+  preds <- lasso.high_acc %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_lasso_high_acc <- data.frame(true = test_data$high_acc, pred = preds)
+  }else{ 
+    cv_preds_lasso_high_acc <- rbind(cv_preds_lasso_high_acc, data.frame(true = test_data$high_acc, pred = preds))}
+  
+  RMSE_cv_lasso_high_acc[fold] <- RMSE(preds, test_data$high_acc)
+  
+}
+compare_high_acc$lasso[1] <- rowMeans(RMSE_cv_lasso_high_acc)
+compare_high_acc$lasso[2] <- cor(cv_preds_lasso_high_acc$true, cv_preds_lasso_high_acc$pred)^2
+
 
 ```
 
@@ -1321,34 +1579,54 @@ When we look at ElasticNet, all coefficients play a role. The most important one
 
 ```{r elastic net - high_acc}
 
-elastic.high_acc <- train(
-  high_acc ~., data = train.data_high_acc, method = "glmnet",
-  trControl = trainControl("cv", number = 10, savePredictions = "all"),
-  tuneLength = 10
-)
-# Model coefficients
-coef(elastic.high_acc$finalModel, elastic.high_acc$bestTune$lambda)
-# Make predictions
-predictions.elastic.high_acc <- elastic.high_acc %>% predict(test.data_high_acc)
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(predictions.elastic.high_acc, test.data_high_acc$high_acc),
-  #Rsquare = R2(predictions.elastic.high_acc, test.data_high_acc$high_acc)
-  Rsquare = calc_r_squared(elastic.high_acc, predictions.elastic.high_acc, test.data_high_acc$high_acc)
+# set up outer cross validation 
+split <- vfold_cv(reg_data,v=10)
+
+best_models_elastic_high_acc <- list()
+RMSE_cv_elastic_high_acc <- data.frame(matrix(ncol=10, nrow=1))
+
+for (fold in seq.int(1,10)){ 
   
-)
+  # set up training and test set for fold
+  train_data <-  analysis(split$splits[[fold]])
+  train_data <- train_data[,c(3, 5:71)]
+  test_data <- assessment(split$splits[[fold]])
+  test_data <- test_data[,c(3, 5:71)]
+  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  train_data <- data.frame(train_data)
+  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data <- data.frame(test_data)
+  
+  elastic.high_acc <- train(
+    high_acc ~., data = train_data, method = "glmnet",
+    trControl = trainControl("cv", number = 10),
+    tuneLength = 10
+  )
+  best_models_elastic_high_acc[[fold]] <- elastic.high_acc$finalModel
+  preds <- elastic.high_acc %>% predict(test_data)
+  
+  # Make predictions
+  if (fold == 1){ 
+    cv_preds_elastic_high_acc <- data.frame(true = test_data$high_acc, pred = preds)
+  }else{ 
+    cv_preds_elastic_high_acc <- rbind(cv_preds_elastic_high_acc, data.frame(true = test_data$high_acc, pred = preds))}
+  
+  RMSE_cv_elastic_high_acc[fold] <- RMSE(preds, test_data$high_acc)
+  
+}
+
+compare_high_acc$elastic[1] <- rowMeans(RMSE_cv_elastic_high_acc)
+compare_high_acc$elastic[2] <- cor(cv_preds_elastic_high_acc$true, cv_preds_elastic_high_acc$pred)^2
+
 ```
 
 ## Compare models
 
-These models explain the most variance - 15-26% of the variance. Here, ElasticNet and Ridge are our best models, with ElasticNet explaining more variance but ridge having a lower error. 
+Again, ElasticNet is our best model. Here, we explain 12% of the variance. 
 
 ```{r compare models - high_acc}
 
-models.high_acc <- list(ridge = ridge.high_acc, lasso = lasso.high_acc, elastic = elastic.high_acc, stepwise = step.high_acc)
-resamples(models.high_acc) %>% summary( metric = "RMSE")
-
-resamples(models.high_acc) %>% summary( metric = "Rsquared")
+compare_high_acc
 
 ```
 
