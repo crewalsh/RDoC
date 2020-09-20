@@ -2,9 +2,9 @@ import pickle
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from brainiak.isc import isc
 
-from utils_ISC import load_all_masked_DFR_runs, make_bilat_HPC, load_DFR_stim_labels, create_trial_type_averages
+from utils_ISC import load_all_masked_DFR_runs_spatial, make_bilat_HPC, load_DFR_stim_labels, \
+    create_trial_type_averages, do_ISC_LOO, do_ISC_pairwise
 
 subj_list = pd.read_csv('fMRI_demographics.csv')
 #subj_list = pd.read_csv('data/fMRI_demographics.csv')
@@ -51,12 +51,12 @@ for j, roi_name in enumerate(ROI_names):
     print(j, roi_name)
     # collect data from all subjects
     for sub in subj_list['PTID']:
-        # for sub in ['1005']:
+    #for sub in ['1005']:
         sub = str(sub)
         if sub in ['1024']:
             if roi_name is not "HPC":
                 mask = all_ROI_masks[roi_name]
-                BOLD_data = load_all_masked_DFR_runs(sub, mask, 4)
+                BOLD_data = load_all_masked_DFR_runs_spatial(sub, mask, 4)
                 print("Trials loaded for sub %s, mask %s" % (sub, roi_name))
 
                 DFR_onsets = np.squeeze(load_DFR_stim_labels(sub))
@@ -75,7 +75,7 @@ for j, roi_name in enumerate(ROI_names):
             else:
                 mask = all_ROI_masks[roi_name]
             # load in DFR data, mask with appropriate mask
-            BOLD_data = load_all_masked_DFR_runs(sub, mask, 4)
+            BOLD_data = load_all_masked_DFR_runs_spatial(sub, mask, 4)
             print("Trials loaded for sub %s, mask %s" % (sub, roi_name))
 
             DFR_onsets = np.squeeze(load_DFR_stim_labels(sub))
@@ -98,13 +98,13 @@ for j, roi_name in enumerate(ROI_names):
     raw_data[roi_name] = data_dict
 
     # Compute isc for each ROI
-    iscs_roi_high[roi_name] = isc(np.transpose(high_correct, [1, 0, 2]))
-    iscs_pairwise_high[roi_name] = isc(np.transpose(high_correct, [1, 0, 2]), pairwise=True)
+    iscs_roi_high[roi_name] = do_ISC_LOO(np.transpose(high_correct, [1, 0, 2]))
+    iscs_pairwise_high[roi_name] = do_ISC_pairwise(np.transpose(high_correct, [1, 0, 2]))
 
     print("finished high load ISCs for roi: %s" % roi_name)
 
-    iscs_roi_low[roi_name] = isc(np.transpose(low_correct, [1, 0, 2]))
-    iscs_pairwise_low[roi_name] = isc(np.transpose(low_correct, [1, 0, 2]), pairwise=True)
+    iscs_roi_low[roi_name] = do_ISC_LOO(np.transpose(low_correct, [1, 0, 2]))
+    iscs_pairwise_low[roi_name] = do_ISC_pairwise(np.transpose(low_correct, [1, 0, 2]))
 
     print("finished low load ISCs for roi: %s" % roi_name)
 

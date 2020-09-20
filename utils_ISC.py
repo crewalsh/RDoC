@@ -4,9 +4,10 @@ import os
 import nibabel as nib
 import numpy as np
 import pandas as pd
-from nilearn.input_data import NiftiLabelsMasker
+from nilearn.input_data import NiftiMasker, NiftiLabelsMasker
 from nilearn.image import load_img, math_img
 import scipy.io
+from scipy.stats import pearsonr
 
 from sklearn.preprocessing import StandardScaler
 
@@ -31,6 +32,23 @@ def load_masked_DFR_data(sub, run, mask):
 
     # helper to load in a single run of DFR data and mask it
     nifti_masker = NiftiLabelsMasker(labels_img=mask)
+
+    data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
+
+    # Load MRI file (in Nifti format) of one localizer run
+    DFR_in = os.path.join(data_path, "swrDFR_run%d.nii" % run)
+    #DFR_in = os.path.join(base_path, "swrDFR_%s_run%d.nii" % (sub, run))
+
+    DFR_data = nib.load(DFR_in)
+    print("Loading data from %s" % DFR_in)
+    DFR_masked_data = nifti_masker.fit_transform(DFR_data)
+    DFR_masked_data = np.transpose(DFR_masked_data)
+    return DFR_masked_data
+
+def load_masked_DFR_data_spatial(sub, run, mask):
+
+    # helper to load in a single run of DFR data and mask it
+    nifti_masker = NiftiMasker(mask_img=mask)
 
     data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM'
 
@@ -72,11 +90,24 @@ def load_all_masked_DFR_runs(sub, mask, num_runs):
     masked_data_all = np.transpose(masked_data_all)
     return masked_data_all
 
+def load_all_masked_DFR_runs_spatial(sub, mask, num_runs):
+
+    # returns concatenated list of all runs of the DFR task for a given subject
+    masked_data_all = np.array([])
+    for run in range(1, num_runs+1):
+        temp_data = load_masked_DFR_data_spatial(sub, run, mask)
+        if run == 1:
+            masked_data_all = temp_data
+        else:
+            masked_data_all = np.hstack((masked_data_all, temp_data))
+    masked_data_all = np.transpose(masked_data_all)
+    return masked_data_all
+
 
 def load_DFR_stim_labels(sub):
 
-    #data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
-    data_path = base_path
+    data_path = base_path+'/subjects/ID'+sub+'/analysis/fMRI/SPM'
+    #data_path = base_path
     in_file = os.path.join(data_path, 'DFR_onsets_ID%s.mat' % sub)
 
     stim_labels = scipy.io.loadmat(in_file)
@@ -167,8 +198,8 @@ def create_trial_type_averages(reshaped_data, labels):
 
 
 def make_bilat_HPC(sub):
-    #data_path = base_path + '/scripts/fmri/BetaSeries/individual_masks/'
-    data_path = base_path
+    data_path = base_path + '/scripts/fmri/BetaSeries/individual_masks/'
+    #data_path = base_path
     l_file_name = "mask_LeftHPC_ID"+sub+".nii"
     r_file_name = "mask_RightHPC_ID"+sub+".nii"
     l_file_in = os.path.join(data_path, l_file_name)
@@ -183,3 +214,70 @@ def make_bilat_HPC(sub):
     bilat_mask = math_img('img1 + img2', img1=R_mask, img2=L_mask)
 
     return bilat_mask
+
+
+def do_ISC_pairwise(data):
+
+    isc_calc = np.zeros((170, 170, 14))
+
+    for sub1 in range(170):
+        for sub2 in range(170):
+            for TR in range(14):
+
+                sub1_data = data[:, TR, sub1]
+                sub2_data = data[:, TR, sub2]
+
+                sub1_nan_idx = np.argwhere(np.isnan(sub1_data)).flatten()
+                sub2_nan_idx = np.argwhere(np.isnan(sub2_data)).flatten()
+
+                sub1_nan = np.ones((sub1_data.shape[0]))
+                sub2_nan = np.ones((sub1_data.shape[0]))
+
+                sub1_nan[sub1_nan_idx] = 0
+                sub2_nan[sub2_nan_idx] = 0
+
+                cross_nans = sub1_nan * sub2_nan
+
+                sub1_data_noNaN = sub1_data[cross_nans == 1]
+                sub2_data_noNaN = sub2_data[cross_nans == 1]
+
+                corr = pearsonr(sub1_data_noNaN, sub2_data_noNaN)
+
+                isc_calc[sub1, sub2, TR] = corr[0]
+        print("finishehd sub %s", sub1)
+
+    return isc_calc
+
+
+def do_ISC_LOO(data):
+
+    isc_calc = np.zeros((170, 14))
+
+    for sub1 in range(170):
+        for TR in range(14):
+            sub1_data = data[:, TR, sub1]
+            to_avg = data[:, TR, :].copy()
+            to_avg = np.delete(to_avg, sub1, axis=1)
+            sub_avg = np.nanmean(to_avg, axis=1)
+
+            sub1_nan_idx = np.argwhere(np.isnan(sub1_data)).flatten()
+            sub_avg_nan_idx = np.argwhere(np.isnan(sub_avg)).flatten()
+
+            sub1_nan = np.ones((sub1_data.shape[0]))
+            sub_avg_nan = np.ones((sub1_data.shape[0]))
+
+            sub1_nan[sub1_nan_idx] = 0
+            sub_avg_nan[sub_avg_nan_idx] = 0
+
+            cross_nans = sub1_nan * sub_avg_nan
+
+            sub1_data_noNaN = sub1_data[cross_nans == 1]
+            sub_avg_data_noNaN = sub_avg[cross_nans == 1]
+
+            corr = pearsonr(sub1_data_noNaN, sub_avg_data_noNaN)
+
+            isc_calc[sub1, TR] = corr[0]
+        print("finishehd sub %s", sub1)
+
+    return isc_calc
+
