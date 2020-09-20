@@ -3,7 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="f8f92241-3fd1-409c-96e6-ec10ad861156" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/p200_EEG.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_EEG.Rmd" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/p200_predictions.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_predictions.Rmd" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />

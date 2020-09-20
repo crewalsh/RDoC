@@ -23,7 +23,8 @@ library(patchwork)
 library(reshape2)
 library(reticulate)
 library(rmatio)
-reticulate::use_python("/Users/catherinewalsh/miniconda3")
+library(rstatix)
+reticulate::use_python("/Users/catherinewalsh/miniconda3/bin/python")
 
 load('data/behav.RData')
 load('data/split_groups_info.RData')
@@ -40,7 +41,7 @@ rects <- data.frame(xstart=c(7),xend=c(9))
 
 ```
 
-```{python load in numpy data, eval=FALSE, include=FALSE}
+```{python load in numpy data,include=FALSE}
 
 import numpy 
 high_correct_pairwise = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/ISC_pairwise_high_correct.npy')
@@ -54,7 +55,7 @@ low_correct_spatial_fusiform = numpy.load('/Users/catherinewalsh/Documents/Code/
 
 ```
 
-```{r load in correlation data, eval=FALSE, include=FALSE}
+```{r load in correlation data, include=FALSE}
 
 high_correct_ISC_pairwise <- py$high_correct_pairwise
 low_correct_ISC_pairwise <- py$low_correct_pairwise
@@ -88,7 +89,7 @@ save(high_correct_ISC_pairwise, low_correct_ISC_pairwise, high_correct_sISC_DFR,
 
 # Temporal ISC 
 
-Want to look at which regions show a load effect. 
+Want to look at which regions show a load effect because we're looking at a lot of the Yeo ROIs. 
 
 ```{r determine which regions show load effects}
 
@@ -209,6 +210,8 @@ for (measure in seq.int(7,9)){
 ```
 ## Pairwise
 
+Here, we're going to do the background calculations look at all the pairwise comparisons of subjects within each network. 
+
 ```{r select out significant pairwise and average into networks}
 
 high_pairwise_sig <- high_correct_ISC_pairwise[,,LOO_results$sig_corrected]
@@ -322,6 +325,8 @@ for (network in seq.int(1,5)){
 
 #### Visualize pairwise comparisons
 
+Let's visualize the pairwise intersubject correlations for each network. Black lines here represent distinctions between working memory capacity groups. 
+
 ```{r plot high load network pairwise matrices}
 
 network_graphs_high_load[[1]] 
@@ -407,6 +412,8 @@ rownames(t_test_res) <- names(network_pairwise)
 
 ```
 
+Here, we're looking to see whether there are significant differences within vs across WMC groups. Visual regions, DMN and DAN regions all show differences within vs across groups. 
+
 ```{r}
 print(t_test_res)
 ```
@@ -454,6 +461,9 @@ for (network in seq.int(1,5)){
 
 #### Average over subjects
 
+The visual network, DMN and DAN show a significant effect of comparison, but no main effect of WMC. For the visual network and the DAN, across group comparisons show stronger ISC than within group. For the DMN, within group comparisons show stronger ISC than across group. In contrast, the FPCN only shows an effect of WMC group, where high capacity subjects show stronger ISC (regardless of comparison) than either low or medium WMC subjects, but no effect of comparison. 
+
+
 ```{r plot bar graphs high load}
 
 (bar_list[["visual"]] + bar_list[["FPCN"]]) +
@@ -464,13 +474,48 @@ bar_list[["VAN"]]
 
 ```
 
+```{r run anovas for high load split WMC within vs across comparison}
+
+anova_split_high_load_data <- list()
+
+for (network in seq.int(1,5)){
+  temp <- melt(split_list[[network]])
+  temp$variable <- as.character(temp$variable)
+  temp$ID <- c(1:56)
+  
+  for (row in seq.int(1,nrow(temp))){
+    split <- strsplit(temp$variable[row], split="_")[[1]]
+    temp$WMC[row] <- split[1]
+    temp$comp[row] <- split[2]
+    
+  }
+  colnames(temp)[1:2] <- c("unsplit", "ISC")
+  temp$WMC <- factor(temp$WMC, levels = c("low","med", "high"))
+  temp$comp <- factor(temp$comp, levels = c("within", "across"))
+  temp$ID <- as.factor(temp$ID)
+  
+  anova_split_high_load_data[[names(split_list)[network]]] <- temp
+  print(names(split_list)[network])
+  res.aov <- aov(ISC ~ WMC*comp + Error(ID/comp), data = anova_split_high_load_data[[network]])
+  print(summary(res.aov))
+}
+
+
+FPCN.aov <- aov(ISC ~ WMC, data= anova_split_high_load_data[["FPCN"]])
+TukeyHSD(FPCN.aov)
+
+
+
+```
+
+
 #### Compare to behavior
 
-VAN - both to acc; trend to span within
-DAN - both to acc; trend to span within
-DMN - both to acc; across to span
-FPCN: across to acc;  within to span 
-visual: both to acc
+* VAN - both to acc; trend to span within
+* DAN - both to acc; trend to span within
+* DMN - both to acc; across to span
+* FPCN: across to acc;  within to span 
+* visual: both to acc
 
 ```{r compare ISC with behavior, warning=FALSE, message=FALSE}
 
@@ -614,6 +659,8 @@ rownames(t_test_res) <- names(network_pairwise)
 
 ```
 
+Looking at the load effects, we only see differences in within vs across WMC groups for the FPCN. 
+
 ```{r}
 print(t_test_res)
 ```
@@ -661,6 +708,12 @@ for (network in seq.int(1,5)){
 
 ```
 
+For the load effects, FPCN shows main effects of both WMC and comparison, but does not show an interaction. DAN just shows a main effect of WMC. 
+
+In the FPCN, we see that high capacity subjects show stronger ISCs than medium or low WMC subjects. However, because this is load effects and the values themselves are negative, this suggests that for high WMC subjects, there is less of a difference between high and load load ISC, while in the medium and low WMC subjects, we see stronger ISC in the low load trials. The within subject main effect tells us that there is a more negative load effect in teh across subject condition, suggesting that there tends to be a larger ISC in the low load trials than high load trials when you compare out of WMC group. 
+
+ For the DAN, we see that high WMC subjects show larger ISC load effects than low WMC subjects, suggesting that there is a larger difference in ISC in the high load trials than low load trials, and that ISC is stronger here in the high load trials. 
+
 ```{r plot bar graphs LE}
 
 (bar_list[["visual"]] + bar_list[["FPCN"]]) +
@@ -671,13 +724,50 @@ bar_list[["VAN"]]
 
 ```
 
+```{r run anovas for LE split WMC within vs across comparison}
+
+anova_split_high_load_data <- list()
+
+for (network in seq.int(1,5)){
+  temp <- melt(split_list[[network]])
+  temp$variable <- as.character(temp$variable)
+  temp$ID <- c(1:56)
+  
+  for (row in seq.int(1,nrow(temp))){
+    split <- strsplit(temp$variable[row], split="_")[[1]]
+    temp$WMC[row] <- split[1]
+    temp$comp[row] <- split[2]
+    
+  }
+  colnames(temp)[1:2] <- c("unsplit", "ISC")
+  temp$WMC <- factor(temp$WMC, levels = c("low","med", "high"))
+  temp$comp <- factor(temp$comp, levels = c("within", "across"))
+  temp$ID <- as.factor(temp$ID)
+  
+  anova_split_high_load_data[[names(split_list)[network]]] <- temp
+  print(names(split_list)[network])
+  res.aov <- aov(ISC ~ WMC*comp + Error(ID/comp), data = anova_split_high_load_data[[network]])
+  print(summary(res.aov))
+}
+
+
+FPCN.aov <- aov(ISC ~ WMC, data= anova_split_high_load_data[["FPCN"]])
+TukeyHSD(FPCN.aov)
+
+DAN.aov <- aov(ISC ~ WMC, data= anova_split_high_load_data[["DAN"]])
+TukeyHSD(DAN.aov)
+
+
+
+```
+
 #### Relate to behavior 
 
-visual with acc within 
-FPCN with span/within 
-DMN with acc within and across
-DAN with span withi; with acc both; both with BPRS if outlier removed
-VAN within with span 
+* visual with acc within 
+* FPCN with span/within 
+* DMN with acc within and across
+* DAN with span withi; with acc both; both with BPRS if outlier removed
+* VAN within with span 
 
 ```{r compare ISC with behavior load effect, warning=FALSE, message=FALSE}
 

@@ -1,0 +1,209 @@
+---
+title: "Elastic Net Predictions"
+author: "Catherine Walsh"
+date: "9/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries and data}
+
+library(tidyverse)
+library(caret)
+
+load("data/PCs.RData")
+load("data/behav.RData")
+
+```
+
+```{r set up data}
+
+PC_list <- list(univ=univ_PCs, sim = sim_PCs, MVPA = MVPA_PCs, EEG = EEG_PCs, RS = RS_PCs, struct = struc_PCs, FA = FA_PCs)
+
+reg_data <- data.frame(PTID = constructs_fMRI$PTID, 
+                       span = constructs_fMRI$omnibus_span_no_DFR_MRI)
+
+reg_data <- Reduce(function(x,y) merge(x=x, y=y, by = "PTID", all.x = TRUE), 
+                   list(reg_data, p200_demographics, p200_data))
+reg_data <- dplyr::select(reg_data,c("PTID", "span", "BPRS_TOT", "XDFR_MRI_ACC_L3","AGE", "GENDER",  "SCANNER"))
+
+colnames(reg_data) <- c("PTID", "span", "BPRS", "high_acc","AGE", "GENDER", "SCANNER")
+reg_data[,6:7] <- reg_data[,6:7]-1
+
+set.seed(123)
+
+```
+
+
+```{r run for span}
+
+best_models_span <- list()
+RMSE_cv_span <- data.frame(matrix(ncol=10, nrow=7))
+pred_list <- list()
+compare_span <- data.frame(matrix(nrow = 2, ncol=7))
+rownames(compare_span) <- c("RMSE", "Rsquared")
+
+for (data_class in seq.int(1,7)){
+  reg_data_span <- merge(reg_data_span, PC_list[[data_class]], by ="PTID", all.x=TRUE)
+  reg_data_span <- reg_data_span[complete.cases(reg_data_span),]
+  
+  split <- vfold_cv(reg_data_span,v=10)
+  best_models <- list()
+  
+  for (fold in seq.int(1,10)){ 
+    
+    # set up training and test set for fold
+    train_data <-  analysis(split$splits[[fold]])
+    train_data <- train_data[,c(2, 5:ncol(reg_data_span))]
+    test_data <- assessment(split$splits[[fold]])
+    test_data <- test_data[,c(2, 5:ncol(reg_data_span))]
+    train_data[,c(2, 5:ncol(train_data))] <- sapply(train_data[,c(2, 5:ncol(train_data))],scale)
+    train_data <- data.frame(train_data)
+    test_data[,c(2, 5:ncol(train_data))] <- sapply(test_data[,c(2, 5:ncol(train_data))], scale)
+    test_data <- data.frame(test_data)
+    
+    elastic <- train(
+      span ~., data = train_data, method = "glmnet",
+      trControl = trainControl("cv", number = 10),
+      tuneLength = 10
+    )
+    best_models[[fold]] <- elastic$finalModel
+    preds <- elastic %>% predict(test_data)
+    
+    # Make predictions
+    if (fold == 1){ 
+      cv_preds_span <- data.frame(true = test_data$span, pred = preds)
+    }else{ 
+      cv_preds_span <- rbind(cv_preds_span, data.frame(true = test_data$span, pred = preds))}
+    
+    RMSE_cv_span[data_class,fold] <- RMSE(preds, test_data$span)
+    print(paste0("finished fold ", fold, sep=""))
+  }
+  
+  compare_span[1, data_class] <- rowMeans(RMSE_cv_span[data_class,])
+  compare_span[2, data_class] <- cor(cv_preds_span$true, cv_preds_span$pred)^2
+  
+  pred_list[[data_class]] <- cv_preds_span
+  best_models_span[[data_class]] <- best_models
+  print(paste0("finished data addition ", data_class, sep=""))
+  
+}
+
+```
+
+```{r run for BPRS}
+
+best_models_BPRS <- list()
+RMSE_cv_BPRS <- data.frame(matrix(ncol=10, nrow=7))
+pred_list_BPRS <- list()
+compare_BPRS <- data.frame(matrix(nrow = 2, ncol=7))
+rownames(compare_BPRS) <- c("RMSE", "Rsquared")
+
+for (data_class in seq.int(1,7)){
+  reg_data_BPRS <- merge(reg_data, PC_list[[data_class]], by ="PTID", all.x=TRUE)
+  reg_data_BPRS <- reg_data_BPRS[complete.cases(reg_data_BPRS),]
+  
+  split <- vfold_cv(reg_data_BPRS,v=10)
+  best_models <- list()
+  
+  for (fold in seq.int(1,10)){ 
+    
+    # set up training and test set for fold
+    train_data <-  analysis(split$splits[[fold]])
+    train_data <- train_data[,c(3, 5:ncol(reg_data_BPRS))]
+    test_data <- assessment(split$splits[[fold]])
+    test_data <- test_data[,c(3, 5:ncol(reg_data_BPRS))]
+    train_data[,c(1:2, 5:ncol(train_data))] <- sapply(train_data[,c(1:2, 5:ncol(train_data))],scale)
+    train_data <- data.frame(train_data)
+    test_data[,c(1:2, 5:ncol(train_data))] <- sapply(test_data[,c(1:2, 5:ncol(train_data))], scale)
+    test_data <- data.frame(test_data)
+    
+    elastic <- train(
+      BPRS ~., data = train_data, method = "glmnet",
+      trControl = trainControl("cv", number = 10),
+      tuneLength = 10
+    )
+    best_models[[fold]] <- elastic$finalModel
+    preds <- elastic %>% predict(test_data)
+    
+    # Make predictions
+    if (fold == 1){ 
+      cv_preds_BPRS <- data.frame(true = test_data$BPRS, pred = preds)
+    }else{ 
+      cv_preds_BPRS <- rbind(cv_preds_BPRS, data.frame(true = test_data$BPRS, pred = preds))}
+    
+    RMSE_cv_BPRS[data_class,fold] <- RMSE(preds, test_data$BPRS)
+    print(paste0("finished fold ", fold, sep=""))
+  }
+  
+  compare_BPRS[1, data_class] <- rowMeans(RMSE_cv_BPRS[data_class,])
+  compare_BPRS[2, data_class] <- cor(cv_preds_BPRS$true, cv_preds_BPRS$pred)^2
+  
+  pred_list_BPRS[[data_class]] <- cv_preds_BPRS
+  best_models_BPRS[[data_class]] <- best_models
+  print(paste0("finished data addition ", data_class, sep=""))
+  
+}
+
+```
+
+`
+```{r run for high_acc}
+
+best_models_high_acc <- list()
+RMSE_cv_high_acc <- data.frame(matrix(ncol=10, nrow=7))
+pred_list_high_acc <- list()
+compare_high_acc <- data.frame(matrix(nrow = 2, ncol=7))
+rownames(compare_high_acc) <- c("RMSE", "Rsquared")
+
+for (data_class in seq.int(1,7)){
+  reg_data_high_acc <- merge(reg_data, PC_list[[data_class]], by ="PTID", all.x=TRUE)
+  reg_data_high_acc <- reg_data_high_acc[complete.cases(reg_data_high_acc),]
+  
+  split <- vfold_cv(reg_data_high_acc,v=10)
+  best_models <- list()
+  
+  for (fold in seq.int(1,10)){ 
+    
+    # set up training and test set for fold
+    train_data <-  analysis(split$splits[[fold]])
+    train_data <- train_data[,c(4, 5:ncol(reg_data_high_acc))]
+    test_data <- assessment(split$splits[[fold]])
+    test_data <- test_data[,c(4, 5:ncol(reg_data_high_acc))]
+    train_data[,c(1:2, 5:ncol(train_data))] <- sapply(train_data[,c(1:2, 5:ncol(train_data))],scale)
+    train_data <- data.frame(train_data)
+    test_data[,c(1:2, 5:ncol(train_data))] <- sapply(test_data[,c(1:2, 5:ncol(train_data))], scale)
+    test_data <- data.frame(test_data)
+    
+    elastic <- train(
+      high_acc ~., data = train_data, method = "glmnet",
+      trControl = trainControl("cv", number = 10),
+      tuneLength = 10
+    )
+    best_models[[fold]] <- elastic$finalModel
+    preds <- elastic %>% predict(test_data)
+    
+    # Make predictions
+    if (fold == 1){ 
+      cv_preds_high_acc <- data.frame(true = test_data$high_acc, pred = preds)
+    }else{ 
+      cv_preds_high_acc <- rbind(cv_preds_high_acc, data.frame(true = test_data$high_acc, pred = preds))}
+    
+    RMSE_cv_high_acc[data_class,fold] <- RMSE(preds, test_data$high_acc)
+    print(paste0("finished fold ", fold, sep=""))
+  }
+  
+  compare_high_acc[1, data_class] <- rowMeans(RMSE_cv_high_acc[data_class,])
+  compare_high_acc[2, data_class] <- cor(cv_preds_high_acc$true, cv_preds_high_acc$pred)^2
+  
+  pred_list_high_acc[[data_class]] <- cv_preds_high_acc
+  best_models_high_acc[[data_class]] <- best_models
+  print(paste0("finished data addition ", data_class, sep=""))
+  
+}
+
+```
+

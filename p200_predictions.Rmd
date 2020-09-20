@@ -750,6 +750,9 @@ reg_data <- reg_data[complete.cases(reg_data),]
 
 set.seed(123)
 lambda <- 10^seq(-3, 3, length = 100)
+
+# save(list = c("univ_PCs", "sim_PCs", "MVPA_PCs", "EEG_PCs", "RS_PCs", "struc_PCs", "FA_PCs"), file = "~/Documents/Code/RDoC_for_GitHub/data/PCs.RData")
+
 ```
 
 
