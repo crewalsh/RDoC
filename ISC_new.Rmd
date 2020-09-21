@@ -41,21 +41,21 @@ rects <- data.frame(xstart=c(7),xend=c(9))
 
 ```
 
-```{python load in numpy data,include=FALSE}
+```{python load in numpy data,eval=FALSE,include=FALSE}
 
 import numpy 
-high_correct_pairwise = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/ISC_pairwise_high_correct.npy')
-low_correct_pairwise = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/ISC_pairwise_low_correct.npy')
-high_correct_spatial_DFR = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/sISC_pairwise_high_correct_DFR.npy')
-low_correct_spatial_DFR = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/sISC_pairwise_low_correct_DFR.npy')
+high_correct_pairwise = numpy.load('data/ISC/ISC_pairwise_high_correct.npy')
+low_correct_pairwise = numpy.load('data/ISC/ISC_pairwise_low_correct.npy')
+high_correct_spatial_DFR = numpy.load('data/ISC/sISC_pairwise_high_correct_DFR.npy')
+low_correct_spatial_DFR = numpy.load('data/ISC/sISC_pairwise_low_correct_DFR.npy')
 
-high_correct_spatial_fusiform = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/sISC_pairwise_high_correct_fusiform.npy')
-low_correct_spatial_fusiform = numpy.load('/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/ISC/sISC_pairwise_low_correct_fusiform.npy')
+high_correct_spatial_fusiform = numpy.load('data/ISC/sISC_pairwise_high_correct_fusiform.npy')
+low_correct_spatial_fusiform = numpy.load('data/ISC/sISC_pairwise_low_correct_fusiform.npy')
 
 
 ```
 
-```{r load in correlation data, include=FALSE}
+```{r load in correlation data,eval=FALSE, include=FALSE}
 
 high_correct_ISC_pairwise <- py$high_correct_pairwise
 low_correct_ISC_pairwise <- py$low_correct_pairwise
@@ -157,8 +157,8 @@ for (network in seq.int(1,5)){
 
 ```
 
-DAN/L3 acc, trend with BPRS
-DMN with L3 acc
+* DAN/L3 acc, trend with BPRS
+* DMN with L3 acc
 
 ```{r make plots}
 
@@ -712,7 +712,7 @@ For the load effects, FPCN shows main effects of both WMC and comparison, but do
 
 In the FPCN, we see that high capacity subjects show stronger ISCs than medium or low WMC subjects. However, because this is load effects and the values themselves are negative, this suggests that for high WMC subjects, there is less of a difference between high and load load ISC, while in the medium and low WMC subjects, we see stronger ISC in the low load trials. The within subject main effect tells us that there is a more negative load effect in teh across subject condition, suggesting that there tends to be a larger ISC in the low load trials than high load trials when you compare out of WMC group. 
 
- For the DAN, we see that high WMC subjects show larger ISC load effects than low WMC subjects, suggesting that there is a larger difference in ISC in the high load trials than low load trials, and that ISC is stronger here in the high load trials. 
+For the DAN, we see that high WMC subjects show larger ISC load effects than low WMC subjects, suggesting that there is a larger difference in ISC in the high load trials than low load trials, and that ISC is stronger here in the high load trials. 
 
 ```{r plot bar graphs LE}
 
@@ -824,19 +824,18 @@ This analysis looks at the inter-subject correlation in two different ROIs: a bi
 
 In order to get this data, we extracted the model-free BOLD activity and applied minimal pre-processing using SPM8 (removing cosine, filtering, detrend and meaning the value across voxels). From there, we separated the data into trials. Because the data was jittered, decided that the onset of a trial should be considered the TR that contains the onset of the trial. Once we had the individual trials separated, we averaged over high and low load trials separately. Correlations were taken across all common voxels in the given mask for each pair of subjects for the high load trials, which is the data that we are showing below. 
 
+
+
 ```{r load sISC data}
 
 corr_temp <- read.mat("data/ISC_corr.mat")
 suj_corr_fusiform <- corr_temp[["suj_corr"]]
 corr_temp <- read.mat("data/ISC_corr_DFR_delay.mat")
+
 suj_corr_DFR <- corr_temp[["suj_corr"]]
 
 suj_corr_fusiform[is.nan(suj_corr_fusiform)] <- NA
 suj_corr_DFR[is.nan(suj_corr_DFR)] <- NA
-
-source("helper_fxns/avg_ISC.R")
-source("helper_fxns/corr_ISC.R")
-
 ```
 
 ```{r re-order subjects by span sISC}
@@ -854,9 +853,6 @@ DFR_ISC_ordered_group <- DFR_ISC_ordered[c(1:56,58:113,115:170),c(1:56,58:113,11
 # remove NaNs
 fusiform_ISC_ordered_group[is.nan(fusiform_ISC_ordered_group)] <- NA
 DFR_ISC_ordered_group[is.nan(DFR_ISC_ordered_group)] <- NA
-
-
-
 ```
 
 ```{r create average sISC}
@@ -948,6 +944,8 @@ colnames(group_se_fusiform) <- cols
 avg_over_groups_fusiform <- list(mean=data.frame(within = matrix(nrow=14,ncol=1),across = matrix(nrow=14,ncol=1)),
                                  se=data.frame(within = matrix(nrow=14,ncol=1),across = matrix(nrow=14,ncol=1)))
 
+split_data_fusiform <- list()
+
 for (TR in seq.int(1:14)){
   
   # define dataframes 
@@ -997,7 +995,8 @@ for (TR in seq.int(1:14)){
   }
   temp2 <- t.test(comps$within,comps$across,paired=TRUE,var.equal = FALSE)
   t_test_res_fusiform[TR,] <- c(temp2$statistic,temp2$p.value)
-  
+ 
+  split_data_fusiform[[TR]] <- split_by_groups 
 }
 
 
@@ -1066,6 +1065,47 @@ merge(melted_group,melted_se) %>%
 graph
 
 ```
+```{r check stats for split groups in fusiform}
+
+fusiform_split_melt_TR5 <- melt(split_data_fusiform[[5]])
+fusiform_split_melt_TR5$variable <- as.character(fusiform_split_melt_TR5$variable)
+
+for (row in seq.int(1,nrow(fusiform_split_melt_TR5))){
+  split <- strsplit(fusiform_split_melt_TR5$variable[row], split="_")[[1]]
+  fusiform_split_melt_TR5$WMC[row] <- split[1]
+  fusiform_split_melt_TR5$comp[row] <- split[2]
+  
+}
+colnames(fusiform_split_melt_TR5)[1:2] <- c("unsplit", "ISC")
+fusiform_split_melt_TR5$WMC <- factor(fusiform_split_melt_TR5$WMC, levels = c("low","med", "high"))
+fusiform_split_melt_TR5$comp <- factor(fusiform_split_melt_TR5$comp, levels = c("within", "across"))
+
+
+aov.res_TR5 <- aov(ISC ~ WMC*comp, data = fusiform_split_melt_TR5)
+
+summary(aov.res_TR5)
+
+
+fusiform_split_melt_TR12 <- melt(split_data_fusiform[[12]])
+fusiform_split_melt_TR12$variable <- as.character(fusiform_split_melt_TR12$variable)
+
+for (row in seq.int(1,nrow(fusiform_split_melt_TR12))){
+  split <- strsplit(fusiform_split_melt_TR12$variable[row], split="_")[[1]]
+  fusiform_split_melt_TR12$WMC[row] <- split[1]
+  fusiform_split_melt_TR12$comp[row] <- split[2]
+  
+}
+colnames(fusiform_split_melt_TR12)[1:2] <- c("unsplit", "ISC")
+fusiform_split_melt_TR12$WMC <- factor(fusiform_split_melt_TR12$WMC, levels = c("low","med", "high"))
+fusiform_split_melt_TR12$comp <- factor(fusiform_split_melt_TR12$comp, levels = c("within", "across"))
+
+
+aov.res_TR12 <- aov(ISC ~ WMC*comp, data = fusiform_split_melt_TR12)
+
+summary(aov.res_TR12)
+
+```
+
 
 If we average over time, there is a super strong correlation between accuracy and average ISC in the fusiform, but we don't see that for any other relationship.  
 
@@ -1104,16 +1144,16 @@ ggplot(data=data_to_plot,aes(x=overall_avg_ISC_fusiform,BPRS_TOT))+
 
 ```
 
-If we break this down by TR, we see signficant linear relationships between ISC and span at TRs 10 and 11, with WHODAS at TR 10 (but I'm not sure I trust this one...) and accuracy at TRs 1, 2, 4, 5, 6, 7, 10, 11, 12, and 13. 
+If we break this down by TR, we see signficant linear relationships between ISC and WHODAS at TR 1, 4, 5, 6, and 9, BPRS at TRs 5-7 and accuracy at TRs 2, 3, 4, 6, 7, 8, 9, 11, and 12. 
 
 Overall, it seems that ISC during probe (and a little bit during encoding) is relate to performance and span. 
 
 ```{r correlate fusiform sISC to other measures for each time point}
 
 corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,7)])
-corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,8)])
-corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,14)])
-corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,20)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,9)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,15)])
+corr_ISC(avg_ISC_fusiform,data_to_plot[,c(1,21)])
 
 
 ```
@@ -1194,6 +1234,7 @@ colnames(group_se_DFR) <- cols
 avg_over_groups_DFR <- list(mean=data.frame(within = matrix(nrow=14,ncol=1),across = matrix(nrow=14,ncol=1)),
                             se=data.frame(within = matrix(nrow=14,ncol=1),across = matrix(nrow=14,ncol=1)))
 
+split_data_DFR <- list()
 for (TR in seq.int(1:14)){
   
   # define dataframes 
@@ -1242,7 +1283,7 @@ for (TR in seq.int(1:14)){
   
   temp2 <- t.test(comps$within,comps$across,paired=TRUE,var.equal = FALSE)
   t_test_res_DFR[TR,] <- c(temp2$statistic,temp2$p.value)
-  
+  split_data_DFR[[TR]] <-split_by_groups
 }
 
 
@@ -1308,6 +1349,45 @@ graph
 
 ```
 
+```{r check stats for split groups in DFR}
+
+DFR_split_melt_TR9 <- melt(split_data_DFR[[9]])
+DFR_split_melt_TR9$variable <- as.character(DFR_split_melt_TR9$variable)
+
+for (row in seq.int(1,nrow(DFR_split_melt_TR9))){
+  split <- strsplit(DFR_split_melt_TR9$variable[row], split="_")[[1]]
+  DFR_split_melt_TR9$WMC[row] <- split[1]
+  DFR_split_melt_TR9$comp[row] <- split[2]
+  
+}
+colnames(DFR_split_melt_TR9)[1:2] <- c("unsplit", "ISC")
+DFR_split_melt_TR9$WMC <- factor(DFR_split_melt_TR9$WMC, levels = c("low","med", "high"))
+DFR_split_melt_TR9$comp <- factor(DFR_split_melt_TR9$comp, levels = c("within", "across"))
+
+
+aov.res_TR9 <- aov(ISC ~ WMC*comp, data = DFR_split_melt_TR9)
+summary(aov.res_TR9)
+
+DFR_split_melt_TR13 <- melt(split_data_DFR[[13]])
+DFR_split_melt_TR13$variable <- as.character(DFR_split_melt_TR13$variable)
+
+for (row in seq.int(1,nrow(DFR_split_melt_TR13))){
+  split <- strsplit(DFR_split_melt_TR13$variable[row], split="_")[[1]]
+  DFR_split_melt_TR13$WMC[row] <- split[1]
+  DFR_split_melt_TR13$comp[row] <- split[2]
+  
+}
+colnames(DFR_split_melt_TR13)[1:2] <- c("unsplit", "ISC")
+DFR_split_melt_TR13$WMC <- factor(DFR_split_melt_TR13$WMC, levels = c("low","med", "high"))
+DFR_split_melt_TR13$comp <- factor(DFR_split_melt_TR13$comp, levels = c("within", "across"))
+
+
+aov.res_TR13 <- aov(ISC ~ WMC*comp, data = DFR_split_melt_TR13)
+
+summary(aov.res_TR13)
+
+```
+
 If we take the same plan of attack as before and look at the correlation between ISC averaged over the whole time course and cognitive/clinical measures, we're seeing the same thing - nothing except a very strong correlation with performance. 
 
 ```{r correlate DFR sISC to other measures}
@@ -1345,8 +1425,8 @@ If we break it down by TR, we again see correlations between ISC in the DFR regi
 ```{r compare DFR sISC to measures}
 
 corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,7)])
-corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,8)])
-corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,14)])
-corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,20)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,9)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,15)])
+corr_ISC(avg_ISC_DFR,data_to_plot[,c(1,21)])
 
 ```

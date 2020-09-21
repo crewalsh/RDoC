@@ -244,7 +244,7 @@ def do_ISC_pairwise(data):
                 corr = pearsonr(sub1_data_noNaN, sub2_data_noNaN)
 
                 isc_calc[sub1, sub2, TR] = corr[0]
-        print("finishehd sub %s", sub1)
+        print("finished sub %s", sub1)
 
     return isc_calc
 
@@ -277,7 +277,7 @@ def do_ISC_LOO(data):
             corr = pearsonr(sub1_data_noNaN, sub_avg_data_noNaN)
 
             isc_calc[sub1, TR] = corr[0]
-        print("finishehd sub %s", sub1)
+        print("finished sub %s", sub1)
 
     return isc_calc
 

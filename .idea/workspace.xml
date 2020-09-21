@@ -3,7 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="f8f92241-3fd1-409c-96e6-ec10ad861156" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ISC_spatial_correlation.py" beforeDir="false" afterPath="$PROJECT_DIR$/ISC_spatial_correlation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ISC_new.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/ISC_new.Rmd" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils_ISC.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils_ISC.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -51,7 +51,7 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.spatial_ISC">
+  <component name="RunManager" selected="Python.spatial_ISC_pickle_to_csv">
     <configuration name="DFR_MVPA" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -221,9 +221,6 @@
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
       <option name="SDK_HOME" value="$USER_HOME$/miniconda3/bin/python" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/data/ISC" />
       <option name="IS_MODULE_SDK" value="false" />
