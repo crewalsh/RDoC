@@ -3,8 +3,14 @@
   <component name="ChangeListManager">
     <list default="true" id="f8f92241-3fd1-409c-96e6-ec10ad861156" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ISC_new.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/ISC_new.Rmd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils_ISC.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils_ISC.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/DFR_MVPA.py" beforeDir="false" afterPath="$PROJECT_DIR$/DFR_MVPA.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MVPA_DFR_unsmoothed.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/MVPA_DFR_unsmoothed.Rmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MVPA_HPC_unsmoothed.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/MVPA_HPC_unsmoothed.Rmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/MVPA_fusiform_unsmoothed.Rmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helper_fxns/find_inverted_U_spectra.R" beforeDir="false" afterPath="$PROJECT_DIR$/helper_fxns/find_inverted_U_spectra.R" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/p200_EEG.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_EEG.Rmd" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pickle_to_csv.py" beforeDir="false" afterPath="$PROJECT_DIR$/pickle_to_csv.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -51,14 +57,11 @@
       </list>
     </option>
   </component>
-  <component name="RunManager" selected="Python.spatial_ISC_pickle_to_csv">
+  <component name="RunManager" selected="Python.DFR_MVPA">
     <configuration name="DFR_MVPA" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
       <option name="SDK_HOME" value="$USER_HOME$/miniconda3/bin/python" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="false" />
@@ -203,6 +206,9 @@
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="$USER_HOME$/miniconda3/envs/mybrainiak/bin/python3.6" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="false" />
@@ -221,6 +227,9 @@
       <module name="RDoC_for_GitHub" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="$USER_HOME$/miniconda3/bin/python" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/data/ISC" />
       <option name="IS_MODULE_SDK" value="false" />

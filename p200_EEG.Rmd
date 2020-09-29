@@ -62,7 +62,7 @@ For the load effects, the only significant PAC measure across WMC groups is the 
 CDA only showed a relationship with the LCD K max measure in the 1 dot condition, but no correlation or obvious inverted U with the DFR load effects or our omnibus span measure. Numerically, it looks like there is an inverted U shaped relationship for the 5 dots - 1 dot and 3 dot - 1 dot, but those relationships are not significant. 
 
 
-```{r load librares and data}
+```{r load libraries and data}
 
 library(tidyverse)
 library(psych)
@@ -256,7 +256,7 @@ plot_list[["POavg_DFR"]][["indiv_loads"]] + plot_list[["POavg_DFR"]][["LE"]] +
 
 ```
 
-```{r select out cue delay probe from ERPs}
+```{r select out cue and probe from ERPs}
 
 cue_average_midOccip_n170 <- select_period_average(ERPS_midOccip_DFR,avg_plots$time[cue_n170_range[1]],avg_plots$time[cue_n170_range[2]],ERPS_times_DFR)
 cue_average_O_n170 <- select_period_average(ERPS_Oavg_DFR,avg_plots$time[cue_n170_range[1]],avg_plots$time[cue_n170_range[2]],ERPS_times_DFR)
@@ -752,7 +752,6 @@ omnibus_span_corr <- list(
 
 ```
 
-
 ```{r find spectra where indiv diffs corr with DFR high acc}
 
 temp_diff <- data.frame(p200_data[p200_data$PTID %in% constructs_fMRI$PTID, c(1,7)])
@@ -825,7 +824,6 @@ ggplot(data=avg_ERSPS_Favg_DFR, aes(x=Y,y=X,fill=Z))+
   theme_classic()
 
 ```
-
 ## Split by WMC 
 
 These plots give a good overview, but we will inspect each of the frequency bands more in depth later. 
@@ -989,8 +987,6 @@ ggplot(data=inverted_U_Favg_ERSPS, aes(x=Y,y=X,fill=Z))+
 
 
 ```
-
-
 ## Correlation to Omnibus Span
 
 Mid occipital cluster shows a positive correlation with span during the encoding and delay period in the beta and low gamma bands, and a negative correlation in the theta through alpha bands during the entire task, but most prominently right at the beginning of the probe period. 
@@ -1052,7 +1048,6 @@ ggplot(data=omnibus_span_corr[["ERSPS_Favg_DFR"]][["plot"]],aes(x=Y,y=X,fill=Z))
 ```
 
 ```{r plot frequency spectrum corr to omnibus - thresholded}
-
 
 ggplot(data=omnibus_span_corr[["ERSPS_midOccip_DFR"]][["thresholded_plot"]],aes(x=Y,y=X,fill=Z))+
   geom_tile()+
@@ -1258,6 +1253,7 @@ ggplot(data=DFR_fMRI_LE_corr[["ERSPS_Favg_DFR"]][["plot"]],aes(x=Y,y=X,fill=Z))+
   theme_classic()
 
 ```
+
 ```{r plot frequency spectrum corr to fMRI LE - thresholded}
 
 
@@ -2097,7 +2093,6 @@ print(summary(alpha_probe_Favg.aov))
 
 Overall, we see differences in load effects during cue and probe in all electrodes (low > high) and in delay during mid occipital and Oz (high > low). 
 
-
 ```{r plot beta}
 
 beta_plot_list[["ERSPS_midOccip_DFR"]][["indiv_loads"]] + beta_plot_list[["ERSPS_midOccip_DFR"]][["LE"]] +
@@ -2154,7 +2149,6 @@ t.test(beta_probe_average_Favg$load_effect,mu=0)
 There are, however, no differences across groups in beta for either the high load trials or load effects. 
 
 ```{r plot beta by groups}
-
 
 midOccip_DFR_beta <- paired_freq_plot(split_betas_plot[["ERSPS_midOccip_DFR"]][["long"]], c("high","low", "load_effect"))
 
@@ -3847,7 +3841,6 @@ for (PAC in seq.int(1,length(PAC_list))){
 }
 
 ```
-
 
 # CDA 
 

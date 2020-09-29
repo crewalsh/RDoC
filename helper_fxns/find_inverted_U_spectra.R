@@ -6,10 +6,10 @@ find_inverted_U_spectra <- function(split_data, all_data){
   #' @param all_data: average of all subjects of spectral data 
   #' @return masked data, ready to be used for a heatmap 
   
-  low_LT_medium_mask <- split_data[["low"]][["load_effect"]] < split_data[["med"]][["load_effect"]]
-  high_LT_med_mask <- split_data[["high"]][["load_effect"]] < split_data[["med"]][["load_effect"]]
+  low_LT_medium_mask <- (abs(split_data[["low"]][["load_effect"]]) < abs(split_data[["med"]][["load_effect"]]))
+  high_LT_medium_mask <-  (abs(split_data[["high"]][["load_effect"]]) < abs(split_data[["med"]][["load_effect"]]))
   
-  U_mask <- low_LT_medium_mask * high_LT_med_mask
+  U_mask <- low_LT_medium_mask * high_LT_medium_mask
   
   U_masked_data <- data.frame(matrix(nrow=nrow(all_data), ncol=ncol(all_data)))
   

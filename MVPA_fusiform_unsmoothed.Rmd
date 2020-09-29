@@ -43,8 +43,10 @@ se <- function(x) {
 ```{r load in data}
 
 #classifier information
-clf_acc <- read.csv('data/MVPA/fusiform_unsmoothed/clf_acc.csv')
-best_c <- read.csv('data/MVPA/fusiform_unsmoothed/best_C.csv')
+clf_acc <- read.csv('data/MVPA/fusiform_unsmoothed/clf_acc.csv', header=FALSE)
+best_c <- read.csv('data/MVPA/fusiform_unsmoothed/best_C.csv', header=FALSE)
+
+
 
 # averaages from template 
 averages_from_template <- list(high_correct = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_high_correct_avg.csv',header=FALSE), 
@@ -108,6 +110,12 @@ A linear SVM classifer was used; the localizer task was split into 6 blocks of s
 
 clf_acc$average <- rowMeans(clf_acc)
 t.test(clf_acc$average,mu=0.33)
+
+ggplot(data = clf_acc, aes(x = average))+ 
+  geom_histogram()+
+  geom_vline(aes(xintercept=0.33), linetype="dotted")+
+  theme_classic()+
+  xlab("Average classifier accuracy")
 
 ```
 
@@ -748,6 +756,8 @@ for (measure in seq.int(1,3)){
 
 ## Template
 
+The reason that the template data looks so discretized is because it's only averaging 1 vs 0 (ie is a face vs not a face) over 6 trials (since there's only one "trial" of the average correct template, and there are 6 CV loops, so averaging over those). 
+
 ### Averaged over time
 
 If we average over time, there are no relationships between template classification and behavior. 
@@ -771,21 +781,21 @@ plot_list <- list()
 for (i in seq.int(1,6)){
   plot_data <- template_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
-  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
+  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=omnibus_span))+
     geom_point()+
     stat_smooth(method="lm")+
     xlab("Probability")+
     ggtitle(colnames(template_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=XDFR_MRI_ACC_L3))+
+  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=XDFR_MRI_ACC_L3))+
     geom_point()+
     stat_smooth(method="lm")+
     xlab("Probability")+
     ggtitle(colnames(template_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=BPRS_TOT))+
+  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=BPRS_TOT))+
     geom_point()+
     stat_smooth(method="lm")+
     xlab("Probability")+

@@ -166,7 +166,7 @@ def load_masked_loc(sub, mask):
     file_in = os.path.join(data_path, "wrLocalizerFFA.nii")
 
     # local data
-    #file_in = os.path.join(base_path,"swrLocalizerFFA_%s.nii" % sub)
+    # file_in = os.path.join(base_path, "swrLocalizerFFA_%s.nii" % sub)
     file_data = nib.load(file_in)
     print("Loaded EPI for subject %s" % sub)
 
@@ -229,7 +229,7 @@ def find_top_voxels(sub, spm_img, mask, num_vox):
 
     # do feature selection: take to voxels from a given contrast map
     data_path = base_path + '/subjects/ID' + sub + '/analysis/fMRI/SPM/DFR_Art_Model2'
-    #data_path = base_path
+    # data_path = base_path
     cont_in = os.path.join(data_path, spm_img)
     contrast_data = nib.load(cont_in)
 
@@ -293,3 +293,13 @@ def create_trial_type_averages(reshaped_data, labels, normalize_in_trial=False):
 
     return average_trials, order
 
+
+def calc_acc(DFR_onsets):
+
+    trial_acc = np.zeros((1, 4))
+    trial_acc[0,0] = sum((DFR_onsets[1, :] == 1) * (DFR_onsets[2, :] == 1))
+    trial_acc[0, 1] = sum((DFR_onsets[1, :] == 0) * (DFR_onsets[2, :] == 1))
+    trial_acc[0, 2] = sum((DFR_onsets[1, :] == 1) * (DFR_onsets[2, :] == 3))
+    trial_acc[0, 3] = sum((DFR_onsets[1, :] == 0) * (DFR_onsets[2, :] == 3))
+
+    return(trial_acc)

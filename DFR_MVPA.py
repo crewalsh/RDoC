@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 # functions I wrote
 from utils import load_loc_stim_labels, load_DFR_stim_labels, time2TR, shift_timing, load_masked_loc, \
-    load_all_masked_DFR_runs, reshape_data, find_top_voxels, create_trial_type_averages, make_bilat_HPC
+    load_all_masked_DFR_runs, reshape_data, find_top_voxels, create_trial_type_averages, make_bilat_HPC, calc_acc
 from utils import base_path, DFR_measure_labels, DFR_average_order, TR_per_run_loc, TR_per_run_DFR, TR, HRF_lag, \
     category_labels
 
@@ -27,6 +27,8 @@ all_suj_indiv_trial_probs = np.zeros((170, 4, 14))
 
 all_suj_clf_score = np.zeros((170, 6))
 all_suj_C_best = np.zeros((170, 6))
+
+all_suj_acc = np.zeros((170, 4))
 
 suj_count = 0
 
@@ -54,6 +56,8 @@ for sub in subj_list['PTID']:
 
     DFR_onsets = np.squeeze(load_DFR_stim_labels(sub))
     DFR_TR_onsets = time2TR(DFR_onsets, TR_per_run_DFR)
+
+    all_suj_acc[suj_count, :] = calc_acc(DFR_onsets)
 
     # shift for HRF
 
@@ -188,7 +192,7 @@ for sub in subj_list['PTID']:
         if not np.isnan(scaler.fit_transform(DFR_average_trials[0][1, :, :])).all():
             incorrect_low_preds = clf.predict(scaler.fit_transform(DFR_average_trials[0][1, :, :]))
             incorrect_low_preds_prob_i = np.copy(incorrect_low_preds)
-            incorrect_low_preds_prob_i[incorrect_low_preds != 0] = 0
+            incorrect_low_preds_prob_i[incorrect_low_preds != 1] = 0
             if low_incorr_score.size == 0:
                 low_incorr_score = incorrect_low_preds_prob_i
             else:
@@ -231,7 +235,7 @@ print("Finished all subjects")
 f = open('MVPA_data_DFR_unsmoothed.pckl', 'wb')
 pickle.dump([all_suj_C_best, all_suj_clf_score, all_suj_high_corr, all_suj_high_incorr, all_suj_low_corr,
              all_suj_low_incorr, all_suj_indiv_trial_preds, all_suj_indiv_trial_probs, DFR_measure_labels,
-             DFR_average_order, category_labels], f)
+             DFR_average_order, category_labels, all_suj_acc], f)
 f.close()
 print("File saved")
 
