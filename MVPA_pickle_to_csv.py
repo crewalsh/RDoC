@@ -1,7 +1,7 @@
 import pandas as pd
 import pickle
 
-mask = "fusiform"
+mask = "HPC"
 
 basepath = "/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/MVPA/"+mask+"_unsmoothed/"
 data_path = basepath+"MVPA_data_"+mask+"_unsmoothed.pckl"

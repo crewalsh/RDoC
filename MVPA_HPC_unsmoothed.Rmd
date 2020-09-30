@@ -2,7 +2,10 @@
 title: "MVPA - HPC unsmoothed"
 author: "Catherine Walsh"
 date: "8/30/2020"
-output: html_document
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
 ---
 
 ```{r setup, include=FALSE}
@@ -41,12 +44,18 @@ se <- function(x) {
 #classifier information
 clf_acc <- read.csv('data/MVPA/HPC_unsmoothed/clf_acc.csv', header=FALSE)
 best_c <- read.csv('data/MVPA/HPC_unsmoothed/best_C.csv', header=FALSE)
+trial_acc <- read.csv("data/MVPA/HPC_unsmoothed/all_suj_acc.csv", header = FALSE)
+colnames(trial_acc) <- c('low correct', 'low incorrect', 'high correct', 'high incorrect')
 
 # averaages from template 
 averages_from_template <- list(high_correct = read.csv('data/MVPA/HPC_unsmoothed/all_suj_high_correct_avg.csv',header=FALSE), 
                                high_incorrect = read.csv('data/MVPA/HPC_unsmoothed/all_suj_high_incorrect_avg.csv',header=FALSE), 
                                low_correct = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_correct_avg.csv',header=FALSE), 
                                low_incorrect = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_incorrect_avg.csv',header=FALSE))
+
+# only want to look at subjects who have at least 4 low load incorrect trials for those analyses 
+min_low_incorrect <- which(trial_acc$`low incorrect` < 4)
+averages_from_template[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
 
 averages_from_template[["high_load_correct_diff"]] <- averages_from_template[["high_correct"]][,1:14] - averages_from_template[["high_incorrect"]][,1:14]
 averages_from_template[["low_load_correct_diff"]] <- averages_from_template[["low_correct"]][,1:14] - averages_from_template[["low_incorrect"]][,1:14]
@@ -58,6 +67,8 @@ individual_trial_averages_probs <- list(
   low_correct = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_correct_indiv_avg_probs.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_incorrect_indiv_avg_probs.csv',header=FALSE)) 
 
+individual_trial_averages_probs[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
+
 individual_trial_averages_probs[["high_load_correct_diff"]] <- individual_trial_averages_probs[["high_correct"]][,1:14] - individual_trial_averages_probs[["high_incorrect"]][,1:14]
 individual_trial_averages_probs[["low_load_correct_diff"]] <- individual_trial_averages_probs[["low_correct"]][,1:14] - individual_trial_averages_probs[["low_incorrect"]][,1:14]
 
@@ -67,6 +78,8 @@ individual_trial_averages_preds <- list(
   high_incorrect = read.csv('data/MVPA/HPC_unsmoothed/all_suj_high_incorrect_indiv_avg_preds.csv',header=FALSE),
   low_correct = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_correct_indiv_avg_preds.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/HPC_unsmoothed/all_suj_low_incorrect_indiv_avg_preds.csv',header=FALSE)) 
+
+individual_trial_averages_preds[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
 
 individual_trial_averages_preds[["high_load_correct_diff"]] <- individual_trial_averages_preds[["high_correct"]][,1:14] - individual_trial_averages_preds[["high_incorrect"]][,1:14]
 
@@ -112,6 +125,7 @@ On average, we were able to classify faces with 42.2% accuracy (statistically si
 
 A linear SVM classifer was used; the localizer task was split into 6 blocks of stimuli. These blocks were used in a pre-defined split for cross validation, where one block of each stimulus type was held out as a test set. Data were normalized within the training and test sets separately. Within this training set, another cross validation process was repeated to tune the cost of the model over the values [0.01, 0.1, 1, 10]. The best value of the cost function was used for each cross validation to score the classifier on the test set. The best classifer was also used to predict face presence at each TR during the DFR task. 
 
+We can see that there are a number of subjects for whom the classifier works below chance - we'll remove those from the analysis
 
 ```{r calculate classifier average}
 
@@ -126,6 +140,19 @@ ggplot(data = clf_acc, aes(x = average))+
 
 
 ```
+
+```{r remove subs with below chance classification}
+
+below_chance_subjs <- which(clf_acc$average < 0.33)
+
+for (trial_type in seq.int(1,6)){
+  averages_from_template[[trial_type]][below_chance_subjs,] <- NA
+  individual_trial_averages_preds[[trial_type]][below_chance_subjs,] <- NA
+  individual_trial_averages_probs[[trial_type]][below_chance_subjs,] <- NA
+}
+
+```
+
 
 ```{r average over all subjects}
 
@@ -181,7 +208,10 @@ t.test(encoding_acc_avg$correct,encoding_acc_avg$incorrect,paired=TRUE)
 
 ```{r probe indiv anova}
 
-probe_data_indiv <- data.frame(high_correct=individual_trial_averages_probs[["high_correct"]]$V11, high_incorrect = individual_trial_averages_probs[["high_incorrect"]]$V11, low_correct = individual_trial_averages_probs[["low_correct"]]$V11)
+probe_data_indiv <- data.frame(high_correct=individual_trial_averages_probs[["high_correct"]]$V11, 
+                               high_incorrect = individual_trial_averages_probs[["high_incorrect"]]$V11, 
+                               low_correct = individual_trial_averages_probs[["low_correct"]]$V11,
+                               low_incorrect = individual_trial_averages_probs[["low_incorrect"]]$V11)
 probe_data_indiv <- melt(probe_data_indiv)
 
 probe.aov <- aov(value ~ variable, data = probe_data_indiv)
@@ -223,10 +253,12 @@ ggplot(data=template_preds_melt%>% filter(level %in% c("high_correct", "high_inc
 
 ```{r test differences in accuracy}
 
-acc_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["low_correct"]]$V10)), incorrect = averages_from_template[["high_incorrect"]]$V10)
+acc_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["low_correct"]]$V10)), 
+                             incorrect = rowMeans(cbind(averages_from_template[["high_incorrect"]]$V10, averages_from_template[["low_incorrect"]]$V10)))
 t.test(acc_data_probe$correct,acc_data_probe$incorrect, paired=TRUE)
 
-acc_data_late_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V11,averages_from_template[["low_correct"]]$V11)), incorrect = averages_from_template[["high_incorrect"]]$V11)
+acc_data_late_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V11,averages_from_template[["low_correct"]]$V11)), 
+                                  incorrect = rowMeans(cbind(averages_from_template[["high_incorrect"]]$V11, averages_from_template[["low_incorrect"]]$V11)))
 t.test(acc_data_late_probe$correct,acc_data_late_probe$incorrect, paired=TRUE)
 
 ```
@@ -234,13 +266,15 @@ t.test(acc_data_late_probe$correct,acc_data_late_probe$incorrect, paired=TRUE)
 
 ```{r probe template anova}
 
-probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V11, high_incorrect = averages_from_template[["high_incorrect"]]$V11, low_correct = averages_from_template[["low_correct"]]$V11)
+probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V11, 
+                                  high_incorrect = averages_from_template[["high_incorrect"]]$V11, 
+                                  low_correct = averages_from_template[["low_correct"]]$V11,
+                                  low_incorrect = averages_from_template[["low_incorrect"]]$V11)
 probe_data_template <- melt(probe_data_template)
 
 probe.aov <- aov(value ~ variable, data = probe_data_template)
 summary(probe.aov)
 TukeyHSD(probe.aov)
-
 
 ```
 
@@ -298,7 +332,7 @@ split_indiv_preds <- split_trial_type(individual_trial_averages_preds, WM_groups
 
 ### From Indiv Trials  
 
-In high load incorrect trials, we see that medium capacity subjects show greater face classification than both low and high capacity subjects during encoding, and greater than low capacity subjects during low load correct trials. We also see that in low load incorrect trials, low capacity subjects show stronger face classification than medium capacity subjects.  
+In high load incorrect trials, we see that medium capacity subjects show greater face classification than both low and high capacity subjects during encoding, and greater than low capacity subjects during low load correct trials.   
 
 ```{r split group indiv prob plots}
 
@@ -336,7 +370,7 @@ for (trial_type in seq.int(1,4)){
 
 ### From templates 
 
-There are no group differences at encoding from the template, but there is a trend towards medium capacity subjects showing stronger face classification evidence during encoding in high load trials, regardless of accuracy. 
+There are no group differences at encoding from the template. 
 
 ```{r split group template prob plots}
 
@@ -377,7 +411,7 @@ for (trial_type in seq.int(1,4)){
 
 ### Averaged over time
 
-If we look averaged over time, we see a significant negative correlation with omnibus span and classification at low load correct trials, and a positive correlation with the difference between correct and incorrect in low load trials. We also see significant negative correlation between BPRS and classification at high load incorrect trials, and a positive cprrelation with the differnce between correct and incorrect at high load trials. 
+If we look averaged over time, we see a significant positive correlation with omnibus span and the difference between classification at corect and incorrect low load trials. We also see significant negative correlation between high load accuacy and decoding at low load incorrect trials, and between BPRS and classification at high load incorrect trials, and a positive cprrelation with the differnce between correct and incorrect at high load trials. 
 
 ```{r make plots to correlate indiv over time}
 
@@ -398,24 +432,24 @@ plot_list <- list()
 for (i in seq.int(1,6)){
   plot_data <- indiv_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
-  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
+  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=omnibus_span))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("Omnibus Span")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=XDFR_MRI_ACC_L3))+
+  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=XDFR_MRI_ACC_L3))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("DFR High Load Acc")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=BPRS_TOT))+
+  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=BPRS_TOT))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("BPRS")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
@@ -443,8 +477,12 @@ for (i in seq.int(1,6)){
 
 cor.test(indiv_avg_over_time$low_incorrect, indiv_avg_over_time$omnibus_span)
 cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$omnibus_span)
+cor.test(indiv_avg_over_time$low_incorrect, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+
 cor.test(indiv_avg_over_time$high_incorrect, indiv_avg_over_time$BPRS_TOT)
 cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$BPRS_TOT)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$BPRS_TOT)
 
 
 
@@ -588,7 +626,7 @@ for (trial_type in seq.int(1,6)){
 
 #### Encoding 
 
-There is a significant positive relationship between accuracy and decoding probability in incorrect high load trials. We also see significant correlations between omnibus span and the correct/incorrect difference at low load. There is a trend towards a negative correlation between BPRS and classification at high load incorrect trials.  
+There is a significant positive relationship between omnibus span and the difference in decoding probability in correct vs incorrect low load trials. 
 
 ```{r plot specific time points from indiv - encoding }
 
@@ -613,20 +651,24 @@ There is a significant positive relationship between accuracy and decoding proba
 (plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
 
-cor.test(individual_trial_averages_probs[["low_correct"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V6,indiv_avg_over_time$omnibus_span)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,indiv_avg_over_time$omnibus_span)
 
-cor.test(individual_trial_averages_probs[["high_incorrect"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V6,indiv_avg_over_time$XDFR_MRI_ACC_L3)
 
-cor.test(individual_trial_averages_probs[["high_incorrect"]]$V6,temp_plot_data$BPRS_TOT)
-cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plot_data$BPRS_TOT)
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$BPRS_TOT)
+cor.test(individual_trial_averages_probs[["high_incorrect"]]$V6[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
 
 ``` 
 
 #### Delay 
 
-There are no relationships at delay, though there is a trending correlation for the difference between correct and incorrect at high load trials and BPRS (excluding the outlier). 
+There is a significant positive relationship between the difference between correct and incorrect trials at low load and span.
+
+There is a significant negative relationship between classification accuracy at low load incorrect trials and accuracy positive relationship between the difference between correct and incorrect trials at low load and accuracy
+
+There is also a trending correlation for the difference between correct and incorrect at high load trials and BPRS (excluding the outlier). 
 
 ``` {r plot specific time points from indiv - delay }
 
@@ -652,17 +694,22 @@ There are no relationships at delay, though there is a trending correlation for 
 (plot_list[["BPRS"]][["delay"]][[5]] + plot_list[["BPRS"]][["delay"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at delay Period")
 
-cor.test(individual_trial_averages_probs[["low_correct"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8,indiv_avg_over_time$omnibus_span)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,indiv_avg_over_time$omnibus)
 
-cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V8[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8,indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,indiv_avg_over_time$XDFR_MRI_ACC_L3)
+
+cor.test(individual_trial_averages_probs[["high_incorrect"]]$V8[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V8[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
 
 ``` 
 
 #### Probe
 
-Omnibus span is significantly negatively correlated withh probability of classification at incorrect low load trials and positively correlated with the difference between correct/incorrect trials at low load. 
+Omnibus span is significantly positively correlated with the difference between correct/incorrect trials at low load. 
 
 Probability of classification at incorrect high load trials is significantly negatively correlated with BPRS at TR 11, and the difference between correct trials at high load trials and BPRS.
 
@@ -689,13 +736,15 @@ Probability of classification at incorrect high load trials is significantly neg
 (plot_list[["BPRS"]][["probe"]][[5]] + plot_list[["BPRS"]][["probe"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
-cor.test(individual_trial_averages_probs[["low_incorrect"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_correct"]]$V11,indiv_avg_over_time$omnibus_span)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V11,indiv_avg_over_time$omnibus_span)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,indiv_avg_over_time$omnibus_span)
 
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,indiv_avg_over_time$XDFR_MRI_ACC_L3)
 
-cor.test(individual_trial_averages_probs[["high_incorrect"]]$V11[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
-cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["high_correct"]]$V11[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["high_incorrect"]]$V11[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11[indiv_avg_over_time$BPRS_TOT < 70],indiv_avg_over_time$BPRS_TOT[indiv_avg_over_time$BPRS_TOT < 70])
 
 
 ```
@@ -804,7 +853,7 @@ for (measure in seq.int(1,3)){
 
 ### Averaged over time
 
-If we average over time, the only significant realtionship is a negative correlation between high load accuracy and the difference between correct and incorrect trials at high load. 
+If we average over time, the only significant relationship is a negative correlation between high load accuracy and the difference between correct and incorrect trials at high load and the positive relationship between span and classification at low load incorrect trials. 
 
 ```{r make plots to correlate template over time}
 
@@ -868,10 +917,12 @@ for (i in seq.int(1,6)){
 (plot_list[["BPRS"]][[5]] + plot_list[["BPRS"]][[6]])+
   plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
 
-cor.test(template_avg_over_time$high_correct, template_avg_over_time$XDFR_MRI_ACC_L3)
-cor.test(template_avg_over_time$high_incorrect, template_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(template_avg_over_time$high_incorrect, template_avg_over_time$omnibus_span)
+cor.test(template_avg_over_time$low_incorrect, template_avg_over_time$omnibus_span)
+cor.test(template_avg_over_time$high_load_diff_correct, template_avg_over_time$omnibus_span)
+cor.test(template_avg_over_time$low_load_diff_correct, template_avg_over_time$omnibus_span)
+
 cor.test(template_avg_over_time$high_load_diff_correct, template_avg_over_time$XDFR_MRI_ACC_L3)
-cor.test(template_avg_over_time$low_load_diff_correct, template_avg_over_time$XDFR_MRI_ACC_L3)
 
 
 ```
@@ -1011,7 +1062,7 @@ for(trial_type in seq.int(1,6)){
 
 #### Encoding 
 
-We see positive relationships with accuracy with classification at incorrect high load trials and correct high load trials.
+No relationships here.
 
 ```{r plot specific time points from template - encoding }
 
@@ -1036,18 +1087,18 @@ We see positive relationships with accuracy with classification at incorrect hig
 (plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]]) +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
 
-cor.test(averages_from_template[["high_incorrect"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(averages_from_template[["high_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(averages_from_template[["high_incorrect"]]$V6,indiv_avg_over_time$omnibus_span)
+cor.test(averages_from_template[["low_incorrect"]]$V6,indiv_avg_over_time$omnibus_span)
+cor.test(averages_from_template[["high_load_correct_diff"]]$V6,indiv_avg_over_time$omnibus_span)
 
-cor.test(averages_from_template[["high_correct"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
-cor.test(averages_from_template[["high_incorrect"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
-cor.test(averages_from_template[["low_correct"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(averages_from_template[["high_incorrect"]]$V6,indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(averages_from_template[["low_correct"]]$V6,indiv_avg_over_time$XDFR_MRI_ACC_L3)
 
 ``` 
 
 #### Delay 
 
-There is a significant negative correlation between accuracy at high load and face classification at high load correct trials during delay period. 
+There are no significant relationships 
 
 ``` {r plot specific time points from template - delay }
 
@@ -1072,7 +1123,9 @@ There is a significant negative correlation between accuracy at high load and fa
 (plot_list[["BPRS"]][["delay"]][[5]] + plot_list[["BPRS"]][["delay"]][[6]]) +
   plot_annotation(title = "BPRS vs Classification at delay Period")
 
-cor.test(averages_from_template[["high_correct"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(averages_from_template[["high_load_correct_diff"]]$V8,indiv_avg_over_time$omnibus_span)
+
+cor.test(averages_from_template[["high_correct"]]$V8,indiv_avg_over_time$XDFR_MRI_ACC_L3)
 
 
 ``` 
@@ -1104,15 +1157,8 @@ There are no significant relationships at probe.
 (plot_list[["BPRS"]][["probe"]][[5]] + plot_list[["BPRS"]][["probe"]][[6]]) +
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
-cor.test(averages_from_template[["high_correct"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(averages_from_template[["high_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
-
-cor.test(averages_from_template[["high_incorrect"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
-
-cor.test(averages_from_template[["high_correct"]]$V11,temp_plot_data$BPRS_TOT)
-
-cor.test(averages_from_template[["high_load_correct_diff"]]$V11[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
-
+cor.test(averages_from_template[["high_correct"]]$V11,indiv_avg_over_time$omnibus_span)
+cor.test(averages_from_template[["high_load_correct_diff"]]$V11,indiv_avg_over_time$omnibus_span)
 
 
 ```

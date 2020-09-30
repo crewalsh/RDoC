@@ -2,7 +2,10 @@
 title: "MVPA DFR Unsmoothed"
 author: "Catherine Walsh"
 date: "8/31/2020"
-output: html_document
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
 ---
 
 ```{r setup, include=FALSE}
@@ -42,12 +45,18 @@ se <- function(x) {
 #classifier information
 clf_acc <- read.csv('data/MVPA/DFR_unsmoothed/clf_acc.csv', header=FALSE)
 best_c <- read.csv('data/MVPA/DFR_unsmoothed/best_C.csv', header=FALSE)
+trial_acc <- read.csv("data/MVPA/DFR_unsmoothed/all_suj_acc.csv", header = FALSE)
+colnames(trial_acc) <- c('low correct', 'low incorrect', 'high correct', 'high incorrect')
 
 # averaages from template 
 averages_from_template <- list(high_correct = read.csv('data/MVPA/DFR_unsmoothed/all_suj_high_correct_avg.csv',header=FALSE), 
                                high_incorrect = read.csv('data/MVPA/DFR_unsmoothed/all_suj_high_incorrect_avg.csv',header=FALSE), 
                                low_correct = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_correct_avg.csv',header=FALSE), 
                                low_incorrect = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_incorrect_avg.csv',header=FALSE))
+
+# only want to look at subjects who have at least 4 low load incorrect trials for those analyses 
+min_low_incorrect <- which(trial_acc$`low incorrect` < 4)
+averages_from_template[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
 
 averages_from_template[["high_load_correct_diff"]] <- averages_from_template[["high_correct"]][,1:14] - averages_from_template[["high_incorrect"]][,1:14]
 averages_from_template[["low_load_correct_diff"]] <- averages_from_template[["low_correct"]][,1:14] - averages_from_template[["low_incorrect"]][,1:14]
@@ -61,8 +70,12 @@ individual_trial_averages_probs <- list(
   low_correct = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_correct_indiv_avg_probs.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_incorrect_indiv_avg_probs.csv',header=FALSE)) 
 
+individual_trial_averages_probs[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
+
 individual_trial_averages_probs[["high_load_correct_diff"]] <- individual_trial_averages_probs[["high_correct"]][,1:14] - individual_trial_averages_probs[["high_incorrect"]][,1:14]
 individual_trial_averages_probs[["low_load_correct_diff"]] <- individual_trial_averages_probs[["low_correct"]][,1:14] - individual_trial_averages_probs[["low_incorrect"]][,1:14]
+
+
 
 
 # averages from individual trials
@@ -71,10 +84,13 @@ individual_trial_averages_preds <- list(
   high_incorrect = read.csv('data/MVPA/DFR_unsmoothed/all_suj_high_incorrect_indiv_avg_preds.csv',header=FALSE),
   low_correct = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_correct_indiv_avg_preds.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/DFR_unsmoothed/all_suj_low_incorrect_indiv_avg_preds.csv',header=FALSE)) 
+individual_trial_averages_preds[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
 
 individual_trial_averages_preds[["high_load_correct_diff"]] <- individual_trial_averages_preds[["high_correct"]][,1:14] - individual_trial_averages_preds[["high_incorrect"]][,1:14]
 
 individual_trial_averages_preds[["low_load_correct_diff"]] <- individual_trial_averages_preds[["low_correct"]][,1:14] - individual_trial_averages_preds[["low_incorrect"]][,1:14]
+
+
 
 
 # replace NaNs with NA, add in PTID  
@@ -194,27 +210,30 @@ ggplot(data=template_preds_melt%>% filter(level %in% c("high_correct", "high_inc
 
 ```{r test differences in accuracy}
 
-acc_data_delay <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V8,averages_from_template[["low_correct"]]$V8)), incorrect = averages_from_template[["high_incorrect"]]$V8)
+acc_data_delay <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V8,averages_from_template[["low_correct"]]$V8)), incorrect = rowMeans(cbind(averages_from_template[["high_incorrect"]]$V8, averages_from_template[["low_incorrect"]]$V8)))
 t.test(acc_data_delay$correct,acc_data_delay$incorrect, paired=TRUE)
 
-acc_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["low_correct"]]$V10)), incorrect = averages_from_template[["high_incorrect"]]$V10)
+acc_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["low_correct"]]$V10)), incorrect = rowMeans(cbind(averages_from_template[["high_incorrect"]]$V10, averages_from_template[["low_incorrect"]]$V10)))
 t.test(acc_data_probe$correct,acc_data_probe$incorrect, paired=TRUE)
 
 ```
 
 ```{r test differences in load}
 
-load_data_delay <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V8,averages_from_template[["high_incorrect"]]$V8)), incorrect = averages_from_template[["low_correct"]]$V8)
+load_data_delay <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V8,averages_from_template[["high_incorrect"]]$V8)), incorrect = rowMeans(cbind(averages_from_template[["low_correct"]]$V8, averages_from_template[["low_incorrect"]]$V8)))
 t.test(load_data_delay$correct,load_data_delay$incorrect, paired=TRUE)
 
-load_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["high_incorrect"]]$V10)), incorrect = averages_from_template[["low_correct"]]$V10)
+load_data_probe <- data.frame(correct = rowMeans(cbind(averages_from_template[["high_correct"]]$V10,averages_from_template[["high_incorrect"]]$V10)), incorrect = rowMeans(cbind(averages_from_template[["low_correct"]]$V10, averages_from_template[["low_incorrect"]]$V10)))
 t.test(load_data_probe$correct,load_data_probe$incorrect, paired=TRUE)
 
 ```
 
 ```{r probe template anova}
 
-probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V10, high_incorrect = averages_from_template[["high_incorrect"]]$V10, low_correct = averages_from_template[["low_correct"]]$V10)
+probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V10, 
+                                  high_incorrect = averages_from_template[["high_incorrect"]]$V10, 
+                                  low_correct = averages_from_template[["low_correct"]]$V10,
+                                  low_incorrect = averages_from_template[["low_incorrect"]]$V10)
 probe_data_template <- melt(probe_data_template)
 
 probe.aov <- aov(value ~ variable, data = probe_data_template)
@@ -238,7 +257,7 @@ wilcox.test(compare_across_temp_indiv$template, compare_across_temp_indiv$indiv,
 
 ```
 
-There is a difference between correct and incorrect trials at probe, which we saw in aboe data. 
+There is a difference between correct and incorrect trials at probe, which we saw in above data. 
 
 ```{r plot differences between correctness for template}
 
@@ -266,7 +285,7 @@ split_indiv_probs <- split_trial_type(individual_trial_averages_probs, WM_groups
 
 ### From Indiv Trials  
 
-Thhere are no differences between working memory capacity groups. 
+There are no differences between working memory capacity groups. 
 
 ```{r split group indiv prob plots}
 
@@ -365,24 +384,24 @@ plot_list <- list()
 for (i in seq.int(1,6)){
   plot_data <- indiv_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
-  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
+  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=omnibus_span))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("Omnibus Span")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=XDFR_MRI_ACC_L3))+
+  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=XDFR_MRI_ACC_L3))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("High Load Acc")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=BPRS_TOT))+
+  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=BPRS_TOT))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("BPRS")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
@@ -409,9 +428,9 @@ for (i in seq.int(1,6)){
   plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
 
 cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$omnibus_span)
-cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$omnibus_span)
 
 cor.test(indiv_avg_over_time$high_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
 cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$BPRS_TOT)
 
 
@@ -586,14 +605,15 @@ We see significant negative relationships with omnibus span and classification a
 
 
 cor.test(individual_trial_averages_probs[["high_correct"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
-cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
 
 cor.test(individual_trial_averages_probs[["high_correct"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(individual_trial_averages_probs[["high_incorrect"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+
 
 cor.test(individual_trial_averages_probs[["high_correct"]]$V6[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
 
 
 ``` 
@@ -625,6 +645,7 @@ There are no significant relationships between individual differences and classi
 (plot_list[["BPRS"]][["delay"]][[5]] + plot_list[["BPRS"]][["delay"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at delay Period")
 
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 
 cor.test(individual_trial_averages_probs[["low_correct"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
@@ -668,7 +689,10 @@ cor.test(individual_trial_averages_probs[["low_incorrect"]]$V11,temp_plot_data$o
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
 
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+
 
 cor.test(individual_trial_averages_probs[["low_correct"]]$V11[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11[temp_plot_data$BPRS_TOT < 70],temp_plot_data$BPRS_TOT[temp_plot_data$BPRS_TOT < 70])

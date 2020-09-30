@@ -4,11 +4,11 @@ prep_trial_levels_for_plot <- function(data){
     sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
   }
   
-  avg_data = data.frame(t(data.frame(high_correct = colMeans(data[["high_correct"]][,1:14]),
-                                     low_correct = colMeans(data[["low_correct"]][,1:14]),
-                                     high_incorrect = colMeans(data[["high_incorrect"]][,1:14]),
+  avg_data = data.frame(t(data.frame(high_correct = colMeans(data[["high_correct"]][,1:14],na.rm=TRUE),
+                                     low_correct = colMeans(data[["low_correct"]][,1:14],na.rm=TRUE),
+                                     high_incorrect = colMeans(data[["high_incorrect"]][,1:14],na.rm=TRUE),
                                      low_incorrect = colMeans(data[["low_incorrect"]][,1:14],na.rm=TRUE), 
-                                     high_load_correct_diff = colMeans(data[["high_correct"]][,1:14] - data[["high_incorrect"]][,1:14]),
+                                     high_load_correct_diff = colMeans(data[["high_correct"]][,1:14] - data[["high_incorrect"]][,1:14],na.rm=TRUE),
                                      low_load_correct_diff = colMeans(data[["low_correct"]][,1:14] - data[["low_incorrect"]][,1:14],na.rm=TRUE))))
   
 

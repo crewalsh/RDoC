@@ -45,7 +45,8 @@ se <- function(x) {
 #classifier information
 clf_acc <- read.csv('data/MVPA/fusiform_unsmoothed/clf_acc.csv', header=FALSE)
 best_c <- read.csv('data/MVPA/fusiform_unsmoothed/best_C.csv', header=FALSE)
-
+trial_acc <- read.csv("data/MVPA/fusiform_unsmoothed/all_suj_acc.csv", header = FALSE)
+colnames(trial_acc) <- c('low correct', 'low incorrect', 'high correct', 'high incorrect')
 
 
 # averaages from template 
@@ -53,6 +54,10 @@ averages_from_template <- list(high_correct = read.csv('data/MVPA/fusiform_unsmo
                                high_incorrect = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_high_incorrect_avg.csv',header=FALSE), 
                                low_correct = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_correct_avg.csv',header=FALSE), 
                                low_incorrect = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_incorrect_avg.csv',header=FALSE))
+
+# only want to look at subjects who have at least 4 low load incorrect trials for those analyses 
+min_low_incorrect <- which(trial_acc$`low incorrect` < 4)
+averages_from_template[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
 
 averages_from_template[["high_load_correct_diff"]] <- averages_from_template[["high_correct"]][,1:14] - averages_from_template[["high_incorrect"]][,1:14]
 averages_from_template[["low_load_correct_diff"]] <- averages_from_template[["low_correct"]][,1:14] - averages_from_template[["low_incorrect"]][,1:14]
@@ -64,6 +69,8 @@ individual_trial_averages_probs <- list(
   low_correct = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_correct_indiv_avg_probs.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_incorrect_indiv_avg_probs.csv',header=FALSE)) 
 
+individual_trial_averages_probs[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
+
 individual_trial_averages_probs[["high_load_correct_diff"]] <- individual_trial_averages_probs[["high_correct"]][,1:14] - individual_trial_averages_probs[["high_incorrect"]][,1:14]
 individual_trial_averages_probs[["low_load_correct_diff"]] <- individual_trial_averages_probs[["low_correct"]][,1:14] - individual_trial_averages_probs[["low_incorrect"]][,1:14]
 
@@ -74,6 +81,9 @@ individual_trial_averages_preds <- list(
   high_incorrect = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_high_incorrect_indiv_avg_preds.csv',header=FALSE),
   low_correct = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_correct_indiv_avg_preds.csv',header=FALSE),
   low_incorrect = read.csv('data/MVPA/fusiform_unsmoothed/all_suj_low_incorrect_indiv_avg_preds.csv',header=FALSE)) 
+
+individual_trial_averages_preds[["low_incorrect"]][min_low_incorrect, 1:14] <- NA
+
 
 individual_trial_averages_preds[["high_load_correct_diff"]] <- individual_trial_averages_preds[["high_correct"]][,1:14] - individual_trial_averages_preds[["high_incorrect"]][,1:14]
 
@@ -190,7 +200,10 @@ ggplot(data=template_preds_melt%>% filter(level %in% c("high_correct", "high_inc
 
 ```{r probe template anova}
 
-probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V11, high_incorrect = averages_from_template[["high_incorrect"]]$V11, low_correct = averages_from_template[["low_correct"]]$V11)
+probe_data_template <- data.frame(high_correct=averages_from_template[["high_correct"]]$V11, 
+                                  high_incorrect = averages_from_template[["high_incorrect"]]$V11, 
+                                  low_correct = averages_from_template[["low_correct"]]$V11,
+                                  low_incorrect = averages_from_template[["low_incorrect"]]$V11)
 probe_data_template <- melt(probe_data_template)
 
 probe.aov <- aov(value ~ variable, data = probe_data_template)
@@ -326,7 +339,7 @@ for (trial_type in seq.int(1,4)){
 
 ### Averaged over time
 
-One significant relationship between classification probability averaged over time and behavior is with DFR high load accuracy and classfication probability at high load incorrect trials - higher classification probability is associated with less accuracy. We also see a significant relationship between high load accuracy and the difference in classification probability - the stronger the correct - incorrect difference, the higher accuracy. 
+One significant relationship between classification probability averaged over time and behavior is with DFR high load accuracy and classfication probability at high load incorrect trials - higher classification probability is associated with less accuracy. We also see a significant relationship between high load accuracy and the difference in classification probability - the stronger the correct - incorrect difference, the higher accuracy. We see a similar relationship between low load incorrect trial and the difference in correct and incorrect trials at low load with omnibus span.
 
 We also see trends (p ~ 0.06) for the relationships of omnibus span and classification probability in the difference between correct and incorrect, and for the accuracy at high load and classification in the low load correct trials. 
 
@@ -349,24 +362,24 @@ plot_list <- list()
 for (i in seq.int(1,6)){
   plot_data <- indiv_avg_over_time[,c(i+1,8:11)]
   colnames(plot_data)[1] <- "prob"
-  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=omnibus_span))+
+  plot_list[["omnibus"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=omnibus_span))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("Omnibus Span")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=XDFR_MRI_ACC_L3))+
+  plot_list[["DFR_Acc"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=XDFR_MRI_ACC_L3))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("DFR L3 Acc")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
-  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(x=prob,y=BPRS_TOT))+
+  plot_list[["BPRS"]][[i]] <- ggplot(data = plot_data,aes(y=prob,x=BPRS_TOT))+
     geom_point()+
     stat_smooth(method="lm")+
-    xlab("Probability")+
+    xlab("BPRS")+
     ggtitle(colnames(indiv_avg_over_time)[i+1])+
     theme_classic()
   
@@ -393,11 +406,17 @@ for (i in seq.int(1,6)){
   plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
 
 cor.test(indiv_avg_over_time$high_correct, indiv_avg_over_time$omnibus_span)
+cor.test(indiv_avg_over_time$low_incorrect, indiv_avg_over_time$omnibus_span)
 cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$omnibus_span)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$omnibus_span)
+
 
 cor.test(indiv_avg_over_time$low_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$low_incorrect, indiv_avg_over_time$XDFR_MRI_ACC_L3)
 cor.test(indiv_avg_over_time$high_incorrect, indiv_avg_over_time$XDFR_MRI_ACC_L3)
 cor.test(indiv_avg_over_time$high_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+cor.test(indiv_avg_over_time$low_load_diff_correct, indiv_avg_over_time$XDFR_MRI_ACC_L3)
+
 
 
 
@@ -543,7 +562,7 @@ for(trial_type in seq.int(1,6)){
 
 #### Encoding 
 
-We see significant correlations between high load accuracy and classification probability during high load correct trials and the correct-incorrect difference in high load trials. 
+We see significant correlations between high load accuracy and classification probability during high load correct trials and the correct-incorrect difference in high load trials. We also see relationships with omnibus span and low load incorrect trials and the difference between correct and incorrect at low load. 
 
 ```{r plot specific time points from indiv - encoding }
 
@@ -568,10 +587,16 @@ We see significant correlations between high load accuracy and classification pr
 (plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
 
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$omnibus_span_no_DFR_MRI)
+
 cor.test(individual_trial_averages_probs[["high_correct"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$XDFR_MRI_ACC_L3)
+
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plot_data$BPRS_TOT)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V6,temp_plot_data$BPRS_TOT)
 
 
 
@@ -579,7 +604,7 @@ cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V6,temp_plo
 
 #### Delay 
 
-There is a significant negative relationship between accuracy at high load and the probability of face classification at low load. 
+There is a significant negative relationship between accuracy at high load and the probability of face classification at low load. There is also a significant relationship between probability at low load incorrect trials and omnibus span and high load accuracy. 
 
 ``` {r plot specific time points from indiv - delay }
 
@@ -605,10 +630,12 @@ There is a significant negative relationship between accuracy at high load and t
   plot_annotation(title = "BPRS vs Classification at delay Period")
 
 cor.test(individual_trial_averages_probs[["high_correct"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,temp_plot_data$omnibus_span_no_DFR_MRI)
 
 cor.test(individual_trial_averages_probs[["low_correct"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V8,temp_plot_data$XDFR_MRI_ACC_L3)
 
 
@@ -619,7 +646,7 @@ cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V8,temp_plo
 
 #### Probe
 
-Probability of classification at incorrect high load trial is significantly negatively correlated with high load accuracy during probe and positively with correct - incorrect difference at high load. 
+Probability of classification at incorrect high load trial is significantly negatively correlated with high load accuracy during probe and positively with correct - incorrect difference at high load. We also see a correlation between omnibus span and probability of classification at low load incorrect trials.
 
 ```{r plot specific time points from indiv - probe }
 
@@ -644,8 +671,12 @@ Probability of classification at incorrect high load trial is significantly nega
 (plot_list[["BPRS"]][["probe"]][[5]] + plot_list[["BPRS"]][["probe"]][[6]])  +
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
+cor.test(individual_trial_averages_probs[["low_incorrect"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
+
 cor.test(individual_trial_averages_probs[["high_incorrect"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(individual_trial_averages_probs[["high_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(individual_trial_averages_probs[["low_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
 
 
 
@@ -756,11 +787,11 @@ for (measure in seq.int(1,3)){
 
 ## Template
 
-The reason that the template data looks so discretized is because it's only averaging 1 vs 0 (ie is a face vs not a face) over 6 trials (since there's only one "trial" of the average correct template, and there are 6 CV loops, so averaging over those). 
+The reason that the template data looks so discretized is because it's only averaging 1 vs 0 (ie is a face vs not a face) over 6 trials (since there's only one "trial" of the average correct template, and there are 6 CV loops, so averaging over those). In contrast, the individual trials have many more to be averaged over, so not as discrete values for each subject. 
 
 ### Averaged over time
 
-If we average over time, there are no relationships between template classification and behavior. 
+If we average over time, there are significant relationships between omnibus span and low load incorrect trials and with the difference between correct and incorrect trials at low load and DFR high load acc. 
 
 ```{r make plots to correlate template over time}
 
@@ -823,6 +854,10 @@ for (i in seq.int(1,6)){
   plot_annotation(title="Correlation of face probability and BPRS")
 (plot_list[["BPRS"]][[5]] + plot_list[["BPRS"]][[6]])+
   plot_annotation(title="Correlation of difference in face probability across correctness and BPRS")
+
+cor.test(template_avg_over_time$low_incorrect, template_avg_over_time$omnibus_span)
+cor.test(template_avg_over_time$low_load_diff_correct, template_avg_over_time$XDFR_MRI_ACC_L3)
+
 
 
 ```
@@ -988,6 +1023,8 @@ for(trial_type in seq.int(1,6)){
 (plot_list[["BPRS"]][["cue"]][[5]] + plot_list[["BPRS"]][["cue"]][[6]]) +
   plot_annotation(title = "BPRS vs Classification at Cue Period")
 
+cor.test(averages_from_template[["low_load_correct_diff"]]$V6, temp_plot_data$omnibus_span_no_DFR_MRI)
+cor.test(averages_from_template[["low_load_correct_diff"]]$V6, temp_plot_data$XDFR_MRI_ACC_L3)
 
 ``` 
 
@@ -1051,9 +1088,10 @@ There is a significant relationship with BPRS and the difference between high co
   plot_annotation(title = "BPRS vs Classification at probe Period")
 
 
-
+cor.test(averages_from_template[["low_incorrect"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(averages_from_template[["low_load_correct_diff"]]$V11,temp_plot_data$omnibus_span_no_DFR_MRI)
 cor.test(averages_from_template[["high_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
+cor.test(averages_from_template[["low_load_correct_diff"]]$V11,temp_plot_data$XDFR_MRI_ACC_L3)
 cor.test(averages_from_template[["high_correct"]]$V11,temp_plot_data$BPRS_TOT)
 cor.test(averages_from_template[["high_incorrect"]]$V11,temp_plot_data$BPRS_TOT)
 cor.test(averages_from_template[["high_load_correct_diff"]]$V11,temp_plot_data$BPRS_TOT)
