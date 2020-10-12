@@ -488,14 +488,14 @@ _PC1:_ Fusiform during encoding and probe
 _PC2:_ DFR during encoding 
 _PC3:_ DFR during probe, averages from template across trial type
 _PC4:_ Delay period decoding 
-_PC5:_ Fusiform encoding during template 
-_PC6:_ Individual trials in fusiform, mostly during delay 
-_PC7:_ Individual trials, low correct and high incorrect 
+_PC5:_ Fusiform encoding during template -- most variance comes from high incorrect trials during individual trials
+_PC6:_ Individual trials in fusiform, mostly during delay - mostly high incorrect individual trials 
+_PC7:_ Individual trials, low correct and high incorrect, but most variance comes from high incorect trials in fusiform during delay from averages 
 _PC8:_ High incorrect DFR across entire trial from individual trials 
 _PC9:_ DFR decoding during correct trials in encoding and probe 
-_PC10:_ Correct averaged from template trials during delay and probe 
-_PC11:_ Low correct trials, mostly delay period 
-_PC12:_ Mostly correct trials from templates in the fusiform 
+_PC10:_ Correct averaged from template trials during delay and probe - mostly DFR during probe 
+_PC11:_ Low correct trials, mostly delay period after largest variance explained from fusiform during encoding
+_PC12:_ Mostly correct trials from templates in the fusiform - most variance explained by encoding and probe 
 
 
 ```{r pca for MVPA}
@@ -688,32 +688,13 @@ Now that we have our PCs to reduce overlapping variance, we can use these in a s
 
 **ElasticNet Regression:** Uses both L1- and L2-norm penalties with regression, so shrinks some coefficients close to zero and some to exactly zero. 
 
+Each model is performed in a 10 fold cross validation, with inner hyperparameter tuning. There are 10% of subjects held out over each of the CV loops, so R squared is calculated using predictions on the held out data and from the best model for each cross validation, meaning that every subject gets a prediction. 
+
+When listing the measures that occur in each model after feature selection, the features listed are those that show up in 7 or more cross validation iterations. 
+
+Across the three potential feature selection procedures, a different model explains the most variance for each behavioral measure. However, across all three, ElasticNet performs consistently the best across the measures (2nd best [roughly the same] for span, second best for BPRS and best for high load accuracy), so we will use that as the model to compare across behavioral measure. 
+
 # Predicting Span
-
-If we compare the 3 models that perform feature selection, the following PCs show up in all 3 of them: 
-
-+ __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions
-+ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
-+ __PC1_sim:__ Similarity within trial 
-+ __PC8_MVPA:__ High incorrect DFR across entire trial from individual trials 
-+ __PC11_MVPA:__ Low correct trials, mostly delay period 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
-+ __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
-+ __PC5_EEG:__ Theta power 
-+ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC11_EEG:__ Oz at low load, mid occipital at high load 
-+ __PC1_RS:__ Participation coefficients across network (both average and individual network)
-+ __PC6_RS:__ Louvain modularity, within DAN connectivity  
-+ __PC6_struct:__ Pericalcarine, lateral occipital
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC20_struct:__ Longitudinal fasciculus 
-+ Age 
-+ Gender 
-
-It seems as though these are particularly weighted towards encoding and regions associated with visual processing. Structural seems to show some HPC involvement. While accuracy seems to be only weighted towards visual components, predicting span also includes measures at low load, from the delay period, and all modalities. 
 
 ## Prep data
 
@@ -744,9 +725,9 @@ reg_data <- Reduce(function(x,y) merge(x=x, y=y, by = "PTID", all.x = TRUE),
 #add scanner, age, gender (won't include CS/NCS in regression) and dummy code 
 reg_data <- merge(reg_data, p200_demographics, by = "PTID")
 reg_data$SCANNER <- reg_data$SCANNER - 1
-reg_data$GROUP <- reg_data$GROUP - 1
+reg_data$GENDER <- reg_data$GENDER - 1
 
-reg_data <- reg_data[complete.cases(reg_data),]
+reg_data <- reg_data[complete.cases(reg_data),1:70]
 
 set.seed(123)
 lambda <- 10^seq(-3, 3, length = 100)
@@ -760,28 +741,23 @@ lambda <- 10^seq(-3, 3, length = 100)
 
 While the final stepwise model is significant overall, we see significant effects of: 
 
-+ __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions
 + __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
-+ __PC1_sim:__ Similarity within trial 
++ __PC5_MVPA:__ Fusiform encoding during template -- most variance comes from high incorrect trials during individual trials
 + __PC8_MVPA:__ High incorrect DFR across entire trial from individual trials 
-+ __PC11_MVPA:__ Low correct trials, mostly delay period 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
++ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform - most variance explained by encoding and probe 
 + __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
-+ __PC5_EEG:__ Theta power 
++ __PC3_EEG:__ Alpha power at delay, beta during cue 
 + __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
 + __PC8_EEG:__ Low gamma in mid occipital component 
 + __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC11_EEG:__ Oz at low load, mid occipital at high load 
 + __PC1_RS:__ Participation coefficients across network (both average and individual network)
-+ __PC6_RS:__ Louvain modularity, within DAN connectivity 
-+ __PC8_RS:__ Global efficiency, FPCN connectivity with DMN, FPCN and DAN, VAN intranetwork connectivity 
-+ __PC1_struct:__ Parietal lobe structures 
-+ __PC6_struct:__ Pericalcarine, lateral occipital 
-+ __PC7_struct:__ corpus callosum, caudate
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC20_struct:__ Longitudinal fasciculus 
++ __PC2_RS:__ FPCN connectivity with other networks, within connectivity for DMN and DAN 
++ __PC2_FA:__ Cingulum/hippocampus 
++ __PC4_struct:__ Temporal pole, entorhinal 
++ __PC6_struct:__ corpus callosum, caudate
++ __PC12_struct:__ Temporal, entorhinal, parahippocampal
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
++ Scanner
 + Gender
 + Age
 
@@ -798,12 +774,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(2, 5:71)]
+  train_data <- train_data[,c(2, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(2, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(2, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   step.span <- train(span ~., data = train_data,
@@ -825,6 +801,58 @@ for (fold in seq.int(1,10)){
 }
 
 ```
+
+```{r set up model coefficient comparison list}
+
+model_comparison_template <- list(univ = data.frame(matrix(nrow=10, ncol=3)), 
+                                  sim = data.frame(matrix(nrow=10, ncol=5)), 
+                                  MVPA = data.frame(matrix(nrow=10, ncol=12)), 
+                                  EEG = data.frame(matrix(nrow=10, ncol=11)), 
+                                  RS = data.frame(matrix(nrow=10, ncol=8)), 
+                                  FA = data.frame(matrix(nrow=10, ncol=5)), 
+                                  struc = data.frame(matrix(nrow=10, ncol=19)), 
+                                  demo = data.frame(matrix(nrow=10, ncol=3)))
+
+colnames(model_comparison_template[["univ"]]) <- paste("PC",c(1:3),"_univ",sep="")
+colnames(model_comparison_template[["sim"]]) <- paste("PC",c(1:5),"_sim",sep="")
+colnames(model_comparison_template[["MVPA"]]) <- paste("PC",c(1:12),"_MVPA",sep="")
+colnames(model_comparison_template[["EEG"]]) <- paste("PC",c(1:11),"_EEG",sep="")
+colnames(model_comparison_template[["RS"]]) <- paste("PC",c(1:8),"_RS",sep="")
+colnames(model_comparison_template[["struc"]]) <- paste("PC",c(1:19),"_struc",sep="")
+colnames(model_comparison_template[["FA"]]) <- paste("PC", c(1:5), "_FA", sep="")
+colnames(model_comparison_template[["demo"]]) <- c("GENDER", "AGE", "SCANNER")
+
+
+```
+
+
+```{r compare model comparison - step span}
+
+step_span_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(data.frame(best_models_step_span[[fold]]$coefficients))
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      step_span_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    step_span_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    step_span_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    step_span_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 
 ```{r create comparisons - span}
 
@@ -852,12 +880,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(2, 5:71)]
+  train_data <- train_data[,c(2, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(2, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(2, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   ridge.span <- train(
     span ~., data = train_data, method = "glmnet",
@@ -888,41 +916,17 @@ compare_span$ridge[2] <- cor(cv_preds_ridge_span$true, cv_preds_ridge_span$pred)
 In the LASSO regression, we see: 
 
 + __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions. This value is negative, suggesting that stronger load effects is related to lower span
-+ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
 + __PC1_sim:__ Similarity within trial 
-+ __PC4_sim:__ Similarity within high load incorrect trials during delay and encoding 
-+ __PC1_MVPA:__ Fusiform during encoding and probe 
-+ __PC2_MVPA:__ DFR during encoding 
-+ __PC4_MVPA:__ Delay period decoding 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC6_MVPA:__ Individual trials in fusiform, mostly during delay 
-+ __PC8_MVPA:__ High incorrect DFR across entire trial from individual trials 
-+ __PC10_MVPA:__ Correct averaged from template trials during delay and probe 
-+ __PC11_MVPA:__ Low correct trials, mostly delay period 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
++ __PC3_MVPA:__ DFR during probe, averages from template across trial type
 + __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
 + __PC3_EEG:__ Alpha power at delay, beta during cue 
-+ __PC5_EEG:__ Theta power 
 + __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC8_EEG:__ Low gamma in mid occipital component 
 + __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC11_EEG:__ Oz at low load, mid occipital at high load 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC1_RS:__ Participation coefficients across network (both average and individual network)
-+ __PC4_RS:__ Global efficiency, within CO connectivity, participation coefficients
-+ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC6_RS:__ Louvain modularity, within DAN connectivity 
-+ __PC6_struct:__ Pericalcarine, lateral occipital 
-+ __PC8_struct:__ Temporal, parahippocampal, FA 
-+ __PC10_struct:__ Cerebellum, frontal 
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC16_struct:__ Accumbens, HPC
-+ __PC18_struct:__ Cingulate, subcortical 
-+ __PC19_struct:__ lateral orbitofrontal poles 
-+ __PC20_struct:__ Longitudinal fasciculus 
++ __PC2_FA:__ Cingulum/hippocampus 
++ __PC5_FA:__ Superior longitudinal fasiculus in temporal lobe in the right hemisphere and cingulum
++ __PC13_struct:__ Temporal pole, temporal cortex, amygdala and HPC
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
++ Scanner
 + Age
 + Gender
 
@@ -939,12 +943,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(2, 5:71)]
+  train_data <- train_data[,c(2, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(2, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(2, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   lasso.span <- train(
     span ~., data =train_data, method = "glmnet",
@@ -970,53 +974,62 @@ compare_span$lasso[2] <- cor(cv_preds_lasso_span$true, cv_preds_lasso_span$pred)
 
 ```
 
+```{r compare model comparison - lasso span}
+
+lasso_span_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(best_models_lasso_span[[fold]])
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (best_models_lasso_span[[fold]][row]!= 0){
+        lasso_span_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    lasso_span_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    lasso_span_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    lasso_span_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
+
 ## ElasticNet
 
 + __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions. This value is negative, suggesting that stronger load effects is related to lower span
-+ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
 + __PC1_sim:__ Similarity within trial 
-+ __PC2_sim:__ Individual to template DFR trials - particularly correct trials 
 + __PC3_sim:__ High load correct trials in DFR, encoding to correct delay trials in high load correct trials in fusiform
-+ __PC1_MVPA:__ Fusiform during encoding and probe 
-+ __PC2_MVPA:__ DFR during encoding 
++ __PC3_MVPA:__ DFR during probe, averages from template across trial type
 + __PC4_MVPA:__ Delay period decoding 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC6_MVPA:__ Individual trials in fusiform, mostly during delay 
-+ __PC7_MVPA:__ Individual trials, low correct and high incorrect 
-+ __PC8_MVPA:__ High incorrect DFR across entire trial from individual trials 
-+ __PC10_MVPA:__ Correct averaged from template trials during delay and probe 
-+ __PC11_MVPA:__ Low correct trials, mostly delay period 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
++ __PC11_MVPA:__ Low correct trials, mostly delay period after largest variance explained from fusiform during encoding
++ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform - most variance explained by encoding and probe 
 + __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
 + __PC3_EEG:__ Alpha power at delay, beta during cue 
 + __PC5_EEG:__ Theta power 
 + __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC8_EEG:__ Low gamma in mid occipital component 
 + __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC11_EEG:__ Oz at low load, mid occipital at high load 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
 + __PC1_RS:__ Participation coefficients across network (both average and individual network)
 + __PC4_RS:__ Global efficiency, within CO connectivity, participation coefficients
-+ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC6_RS:__ Louvain modularity, within DAN connectivity 
-+ __PC8_RS:__ Global efficiency, FPCN connectivity with DMN, FPCN and DAN, VAN intranetwork connectivity 
-+ __PC1_struct:__ Parietal lobe structures 
-+ __PC5_struct:__ Temporal pole, entorhinal 
-+ __PC6_struct:__ Pericalcarine, lateral occipital
-+ __PC7_struct:__ corpus callosum, caudate
-+ __PC8_struct:__ Temporal, parahippocampal, FA 
-+ __PC10_struct:__ Cerebellum, frontal 
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
-+ __PC16_struct:__ Accumbens, HPC
-+ __PC19_struct:__ lateral orbitofrontal poles 
-+ __PC20_struct:__ Longitudinal fasciculus 
++ __PC2_FA:__ Cingulum/hippocampus 
++ __PC5_FA:__ Superior longitudinal fasiculus in temporal lobe in the right hemisphere and cingulum
++ __PC13_struct:__ Temporal pole, temporal cortex, amygdala and HPC
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
++ __PC16_struct__ Temporal, orbitofrontal , frontal pole
++ Scanner
 + Age
 + Gender
+
+It seems as though these are particularly weighted towards encoding and regions associated with visual processing. Structural seems to show some HPC involvement. While accuracy seems to be only weighted towards visual components, predicting span also includes measures at low load, from the delay period, and all modalities. 
 
 
 ```{r elastic net - span}
@@ -1031,12 +1044,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(2, 5:71)]
+  train_data <- train_data[,c(2, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(2, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(2, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   elastic.span <- train(
@@ -1062,9 +1075,39 @@ compare_span$elastic[2] <- cor(cv_preds_elastic_span$true, cv_preds_elastic_span
 
 ```
 
+```{r compare model comparison - elastic span}
+
+elastic_span_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- coef(best_models_elastic_span[[fold]], s = best_models_elastic_span[[fold]]$tuneValue$lambda)
+  split_coef <- strsplit(rownames(coefs), split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (coefs[row]!= 0){
+        elastic_span_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% rownames(coefs)){
+    elastic_span_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% rownames(coefs)){
+    elastic_span_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% rownames(coefs)){
+    elastic_span_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ## Compare Models
 
-When comparing models, ElasticNet is our best model, explaining ~9% of the variance. 
+When comparing models, LASSO is our best model that contains feature selection, explaining ~9% of the variance in span.
+Ridge regression does slightly better, explaining 11% of the variance. 
 
 ```{r compare models - span}
 compare_span
@@ -1072,32 +1115,26 @@ compare_span
 
 # Predicting BPRS
 
-If we look across models, the only things that are shared are: 
-
-+ __PC5_EEG:__ Theta power 
-+ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC9_EEG:__ P3 component
-+ __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
-+ Scanner 
-
-
 ## Stepwise regression
 
 To predict BPRS, we see the PCs that contain important information are: 
 
++ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
 + __PC1_sim:__ Similarity within trial 
-+ __PC5_MVPA:__ Fusiform encoding during template 
++ __PC5_MVPA:__ Fusiform encoding during template -- most variance comes from high incorrect trials during individual trials
 + __PC1_EEG:__ Alpha and beta at high load during probe 
-+ __PC5_EEG:__ Theta power 
-+ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC9_EEG:__ P3 component
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power
-+ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC3_struct:__ subcortical; cerebellum, hippocampus
-+ __PC5_struct:__ Temporal pole, entorhinal 
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
++ __PC7_EEG:__ P3, n170 amplitude; low gamma 
++ __PC11_EEG:__ Oz at low load, mid occipital at high load 
++ __PC4_RS:__ Global efficiency, within CO connectivity, participation coefficients
++ __PC2_FA:__ Cingulum/hippocampus 
++ __PC3_FA:__ cingulum 
++ __PC5_FA:__ Superior longitudinal fasiculus in temporal lobe in the right hemisphere and cingulum
++ __PC2_struct:__ Subcortical structures (including cerebellum)
++ __PC4_struct:__ Temporal pole, entorhinal 
++ __PC7_struct:__ More subcortical
++ __PC8_struct:__ Frontal pole (and other frontal regions)
++ __PC14_struct:__ pars orbitalis, cingulate, accumbens
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
 + Age
 + Scanner
 
@@ -1113,12 +1150,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(4, 5:71)]
+  train_data <- train_data[,c(4, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(4, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(4, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   step.BPRS <- train(BPRS ~., data = train_data,
@@ -1137,6 +1174,33 @@ for (fold in seq.int(1,10)){
   
   RMSE_cv_step_BPRS[fold] <- RMSE(preds, test_data$BPRS)
   
+}
+
+```
+
+```{r compare model comparison - step BPRS}
+
+step_BPRS_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(data.frame(best_models_step_BPRS[[fold]]$coefficients))
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      step_BPRS_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    step_BPRS_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    step_BPRS_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    step_BPRS_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
 }
 
 ```
@@ -1166,12 +1230,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(4, 5:71)]
+  train_data <- train_data[,c(4, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(4, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(4, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   ridge.BPRS <- train(
     BPRS ~., data = train_data, method = "glmnet",
@@ -1200,10 +1264,13 @@ compare_BPRS$ridge[2] <- cor(cv_preds_ridge_BPRS$true, cv_preds_ridge_BPRS$pred)
 
 LASSO gives us almost a combination of the above analyses: 
 
-+ __PC5_EEG:__ Theta power 
-+ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
-+ __PC9_EEG:__ P3 component
-+ __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
++ __PC7_EEG:__ P3, n170 amplitude; low gamma 
++ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
++ __PC7_struct:__ More subcortical
++ __PC14_struct:__ pars orbitalis, cingulate, accumbens
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
++ Gender
++ Age
 + Scanner
 
 
@@ -1220,12 +1287,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(4, 5:71)]
+  train_data <- train_data[,c(4, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(4, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(4, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   lasso.BPRS <- train(
     BPRS ~., data =train_data, method = "glmnet",
@@ -1250,52 +1317,48 @@ compare_BPRS$lasso[2] <- cor(cv_preds_lasso_BPRS$true, cv_preds_lasso_BPRS$pred)
 
 ```
 
+```{r compare model comparison - lasso BPRS}
+
+lasso_BPRS_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(best_models_lasso_BPRS[[fold]])
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (best_models_lasso_BPRS[[fold]][row]!= 0){
+        lasso_BPRS_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    lasso_BPRS_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    lasso_BPRS_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    lasso_BPRS_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ## ElasticNet
 
-+ __PC2_univ:__ delay load effect
-+ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
-+ __PC1_sim:__ Similarity within trial 
 + __PC3_sim:__ High load correct trials in DFR, encoding to correct delay trials in high load correct trials in fusiform
-+ __PC5_sim:__ Correlation within low correct and high incorrect trials in DFR mask 
-+ __PC1_MVPA:__ Fusiform during encoding and probe 
-+ __PC2_MVPA:__ DFR during encoding 
-+ __PC3_MVPA:__ DFR during probe, averages from template across trial type
-+ __PC4_MVPA:__ Delay period decoding 
-+ __PC5_MVPA:__ Fusiform encoding during template
-+ __PC7_MVPA:__ Individual trials, low correct and high incorrect 
-+ __PC8_MVPA:__ High incorrect DFR across entire trial from individual trials 
-+ __PC9_MVPA:__ DFR decoding during correct trials in encoding and probe 
++ __PC7_MVPA:__ Individual trials, low correct and high incorrect, but most variance comes from high incorrect trials in fusiform during delay from averages 
 + __PC1_EEG:__ Alpha and beta at high load during probe 
-+ __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
-+ __PC3_EEG:__ Alpha power at delay, beta during cue 
-+ __PC4_EEG:__ Low gamma 
-+ __PC5_EEG:__ Theta power 
-+ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
 + __PC7_EEG:__ P3, n170 amplitude; low gamma 
 + __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC11_EEG:__ Oz at low load, mid occipital at high load 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
-+ __PC1_RS:__ Participation coefficients across network (both average and individual network)
-+ __PC2_RS:__ FPCN connectivity with other networks, within connectivity for DMN and DAN 
-+ __PC4_RS:__ Global efficiency, within CO connectivity, participation coefficients
 + __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC2_struct:__ FA measures 
-+ __PC3_struct:__ subcortical; cerebellum, hippocampus
-+ __PC4_struct:__ Cuneus, pericalcarine, superior parietal, lingual 
-+ __PC5_struct:__ Temporal pole, entorhinal 
-+ __PC7_struct:__ corpus callosum, caudate
-+ __PC8_struct:__ Temporal, parahippocampal, FA _PC9:_ Frontal pole, corpus callosum and corpus callosum 
-+ __PC10_struct:__ Cerebellum, frontal 
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC14_struct:__ corticospinal tract, cingulum, pars triangularis 
-+ __PC15_struct:__ caudal anterior cingulate, transverse temporal 
-+ __PC16_struct:__ Accumbens, HPC
-+ __PC19_struct:__ lateral orbitofrontal poles 
-+ __PC20_struct:__ Longitudinal fasciculus 
++ __PC4_struct:__ Temporal pole, entorhinal 
++ __PC7_struct:__ More subcortical
++ __PC14_struct:__ pars orbitalis, cingulate, accumbens
++ __PC15_struct:__ left hemisphere subcortical, pars triangularis
++ Gender
 + Age
 + Scanner
 
@@ -1310,12 +1373,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(4, 5:71)]
+  train_data <- train_data[,c(4, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(4, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(4, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   elastic.BPRS <- train(
@@ -1342,9 +1405,38 @@ compare_BPRS$elastic[2] <- cor(cv_preds_elastic_BPRS$true, cv_preds_elastic_BPRS
 
 ```
 
+```{r compare model comparison - elastic BPRS}
+
+elastic_BPRS_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- coef(best_models_elastic_BPRS[[fold]], s = best_models_elastic_BPRS[[fold]]$tuneValue$lambda)
+  split_coef <- strsplit(rownames(coefs), split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (coefs[row]!= 0){
+        elastic_BPRS_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% rownames(coefs)){
+    elastic_BPRS_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% rownames(coefs)){
+    elastic_BPRS_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% rownames(coefs)){
+    elastic_BPRS_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ## Compare Models
 
-Again, ElasticNet is our best model, explaining 15% of the variance with the lowest RMSE. 
+Here, stepwise regression is the best model that performs feature selection - it explains 9% of the variance in BPRS, although it does have the highest RMSE. Again, Ridge explains the most variance (10%). 
 
 ```{r compare models - BPRS}
 
@@ -1353,28 +1445,22 @@ compare_BPRS
 
 # Predicting Accuracy 
 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
-+ __PC7_EEG:__ P3, n170 amplitude; low gamma 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC15_struct:__ caudal anterior cingulate, transverse temporal 
-
-There are fewer things that are related to accuracy, and these seem to relate to the activity in the fusiform/other visual measures and performance measures at high load conditions. Interestingly, none of the components related to accuracy across all models come from resting state or similarity measures.
-
 ## Stepwise regression
 
-+ __PC2_sim:__ Individual to template DFR trials - particularly correct trials 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
-+ __PC7_EEG:__ P3, n170 amplitude; low gamma 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
-+ __PC8_RS:__ Global efficiency, FPCN connectivity with DMN, FPCN and DAN, VAN intranetwork connectivity 
-+ __PC8_struct:__ Temporal, parahippocampal, FA _PC9:_ Frontal pole, corpus callosum and corpus callosum 
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC15_struct:__ caudal anterior cingulate, transverse temporal 
++ __PC1_univ:__ encoding load effects and the combined encoding+encoding-delay in the PFC regions
++ __PC2_univ:__ delay load effect
++ __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
++ __PC1_sim:__ Similarity within trial 
++ __PC2_MVPA:__ DFR during encoding 
++ __PC4_EEG:__ Low gamma 
++ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
++ __PC9_EEG:__ P3 component
++ __PC11_EEG:__ Oz at low load, mid occipital at high load 
++ __PC3_FA:__ cingulum 
++ __PC2_struct:__ Subcortical structures (including cerebellum)
++ Gender
++ Age
++ Scanner
 
 ```{r stepwise - high acc}
 
@@ -1388,18 +1474,18 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(3, 5:71)]
+  train_data <- train_data[,c(3, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(3, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(3, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   step.high_acc <- train(high_acc ~., data = train_data,
-                     method = "lmStepAIC", 
-                     trControl = trainControl("cv", number = 10),
-                     trace = FALSE
+                         method = "lmStepAIC", 
+                         trControl = trainControl("cv", number = 10),
+                         trace = FALSE
   )
   best_models_step_high_acc[[fold]] <- step.high_acc$finalModel
   preds <- step.high_acc %>% predict(test_data)
@@ -1416,6 +1502,33 @@ for (fold in seq.int(1,10)){
 
 ```
 
+```{r compare model comparison - step high_acc}
+
+step_high_acc_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(data.frame(best_models_step_high_acc[[fold]]$coefficients))
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      step_high_acc_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    step_high_acc_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    step_high_acc_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    step_high_acc_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ```{r create comparisons - high_acc}
 
 compare_high_acc <- data.frame(matrix(nrow=2, ncol=4))
@@ -1423,7 +1536,7 @@ colnames(compare_high_acc) <- c("stepwise", "ridge", "lasso", "elastic")
 rownames(compare_high_acc) <- c("RMSE", "Rsquared")
 
 compare_high_acc$stepwise[1] <- rowMeans(RMSE_cv_step_high_acc)
-compare_high_acc$stepwise[2] <- cor(cv_preds_high_acc$true, cv_preds_high_acc$pred)^2
+compare_high_acc$stepwise[2] <- cor(cv_preds_step_high_acc$true, cv_preds_step_high_acc$pred)^2
 
 ```
 
@@ -1442,12 +1555,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(3, 5:71)]
+  train_data <- train_data[,c(3, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(3, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(3, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   ridge.high_acc <- train(
     high_acc ~., data = train_data, method = "glmnet",
@@ -1478,24 +1591,21 @@ compare_high_acc$ridge[2] <- cor(cv_preds_high_acc$true, cv_preds_high_acc$pred)
 + __PC2_univ:__ delay load effect
 + __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
 + __PC1_sim:__ Similarity within trial 
-+ __PC5_sim:__ Correlation within low correct and high incorrect trials in DFR mask 
-+ __PC2_MVPA:__ DFR during encoding 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC10_MVPA:__ Correct averaged from template trials during delay and probe 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
++ __PC5_MVPA:__ Fusiform encoding during template -- most variance comes from high incorrect trials during individual trials
++ __PC10_MVPA:__ Correct averaged from template trials during delay and probe - mostly DFR during probe 
++ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform - most variance explained by encoding and probe 
 + __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
 + __PC4_EEG:__ Low gamma 
++ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
 + __PC7_EEG:__ P3, n170 amplitude; low gamma 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
-+ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC8_RS:__ Global efficiency, FPCN connectivity with DMN, FPCN and DAN, VAN intranetwork connectivity 
-+ __PC3_struct:__ subcortical; cerebellum, hippocampus
-+ __PC4_struct:__ Cuneus, pericalcarine, superior parietal, lingual 
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC15_struct:__ caudal anterior cingulate, transverse temporal 
++ __PC9_EEG:__ P3 component
++ __PC11_EEG:__ Oz at low load, mid occipital at high load 
++ __PC2_struct:__ Subcortical structures (including cerebellum)
++ __PC3_struct:__ Cuneus, pericalcarine, superior parietal, lingual 
++ __PC17_struct:__ banks sts, some temporal and parietal cortex
++ Gender
 + Age
++ Scanner
 
 
 ```{r lasso - high_acc}
@@ -1511,12 +1621,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(3, 5:71)]
+  train_data <- train_data[,c(3, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(3, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(3, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   lasso.high_acc <- train(
     high_acc ~., data =train_data, method = "glmnet",
@@ -1541,6 +1651,35 @@ compare_high_acc$lasso[2] <- cor(cv_preds_lasso_high_acc$true, cv_preds_lasso_hi
 
 ```
 
+```{r compare model comparison - lasso high_acc}
+
+lasso_high_acc_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- rownames(best_models_lasso_high_acc[[fold]])
+  split_coef <- strsplit(coefs, split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (best_models_lasso_high_acc[[fold]][row]!= 0){
+        lasso_high_acc_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% coefs){
+    lasso_high_acc_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% coefs){
+    lasso_high_acc_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% coefs){
+    lasso_high_acc_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ## Elastic Net
 
 When we look at ElasticNet, all coefficients play a role. The most important ones seem to be: 
@@ -1549,36 +1688,22 @@ When we look at ElasticNet, all coefficients play a role. The most important one
 + __PC2_univ:__ delay load effect
 + __PC3_univ:__ encoding - delay in parietal regions and fusiform activity during delay 
 + __PC1_sim:__ Similarity within trial 
-+ __PC2_sim:__ Individual to template DFR trials - particularly correct trials 
 + __PC5_sim:__ Correlation within low correct and high incorrect trials in DFR mask 
-+ __PC2_MVPA:__ DFR during encoding 
-+ __PC5_MVPA:__ Fusiform encoding during template 
-+ __PC9_MVPA:__ DFR decoding during correct trials in encoding and probe 
-+ __PC10_MVPA:__ Correct averaged from template trials during delay and probe 
-+ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform 
++ __PC5_MVPA:__ Fusiform encoding during template -- most variance comes from high incorrect trials during individual trials
++ __PC10_MVPA:__ Correct averaged from template trials during delay and probe - mostly DFR during probe 
++ __PC12_MVPA:__ Mostly correct trials from templates in the fusiform - most variance explained by encoding and probe 
 + __PC2_EEG:__ ERSPs at probe during low load trials; specifically, low gamma  
 + __PC4_EEG:__ Low gamma 
++ __PC6_EEG:__ N170 amplitude and high load Oz power across frequency band 
 + __PC7_EEG:__ P3, n170 amplitude; low gamma 
 + __PC9_EEG:__ P3 component
-+ __PC10_EEG:__ CDA - 1 dot condition 
-+ __PC12_EEG:__ CDA - 5 dot condition; low gamma power 
-+ __PC13_EEG:__ CDA - 3 dot condition; cue N170 amplitude, mid occipital theta power at high load
-+ __PC1_RS:__ Participation coefficients across network (both average and individual network)
-+ __PC2_RS:__ FPCN connectivity with other networks, within connectivity for DMN and DAN 
-+ __PC3_RS:__ Within connectivity for DMN, FPCN connectivity with visual, CO, DMN, DAN networks
-+ __PC5_RS:__ Within visual connectivity and participation coefficient, within CO connectivity 
-+ __PC7_RS:__ Within network VAN connectivity 
-+ __PC8_RS:__ Global efficiency, FPCN connectivity with DMN, FPCN and DAN, VAN intranetwork connectivity 
-+ __PC3_struct:__ subcortical; cerebellum, hippocampus
-+ __PC4_struct:__ Cuneus, pericalcarine, superior parietal, lingual 
-+ __PC6_struct:__ Pericalcarine, lateral occipital
-+ __PC8_struct:__ Temporal, parahippocampal, FA _PC9:_ Frontal pole, corpus callosum and corpus callosum 
-+ __PC11_struct:__ Corpus callosum, cerebellum, cingulum/HPC connection
-+ __PC12_struct:__ Parahippocampal and lateral occipital 
-+ __PC13_struct:__ L HPC, HPC/cingulum connection 
-+ __PC15_struct:__ caudal anterior cingulate, transverse temporal 
++ __PC11_EEG:__ Oz at low load, mid occipital at high load 
++ __PC2_struct:__ Subcortical structures (including cerebellum)
++ __PC3_struct:__ Cuneus, pericalcarine, superior parietal, lingual 
++ __PC17_struct:__ banks sts, some temporal and parietal cortex
++ Gender
++ Scanner
 + Age 
-
 
 ```{r elastic net - high_acc}
 
@@ -1592,12 +1717,12 @@ for (fold in seq.int(1,10)){
   
   # set up training and test set for fold
   train_data <-  analysis(split$splits[[fold]])
-  train_data <- train_data[,c(3, 5:71)]
+  train_data <- train_data[,c(3, 5:70)]
   test_data <- assessment(split$splits[[fold]])
-  test_data <- test_data[,c(3, 5:71)]
-  train_data[,1:64] <- sapply(train_data[,1:64],scale)
+  test_data <- test_data[,c(3, 5:70)]
+  train_data[,1:67] <- sapply(train_data[,1:67],scale)
   train_data <- data.frame(train_data)
-  test_data[,1:64] <- sapply(test_data[,1:64], scale)
+  test_data[,1:67] <- sapply(test_data[,1:67], scale)
   test_data <- data.frame(test_data)
   
   elastic.high_acc <- train(
@@ -1623,9 +1748,38 @@ compare_high_acc$elastic[2] <- cor(cv_preds_elastic_high_acc$true, cv_preds_elas
 
 ```
 
+```{r compare model comparison - elastic high_acc}
+
+elastic_high_acc_best_coeffs <- model_comparison_template
+
+for (fold in seq.int(1,10)){ 
+  coefs <- coef(best_models_elastic_high_acc[[fold]], s = best_models_elastic_high_acc[[fold]]$tuneValue$lambda)
+  split_coef <- strsplit(rownames(coefs), split="_")
+  for (row in seq.int(2,length(coefs))){
+    if (length(split_coef[[row]]) > 1){
+      PC <- as.numeric(strsplit(split_coef[[row]][[1]], split="PC")[[1]][[2]])
+      if (coefs[row]!= 0){
+        elastic_high_acc_best_coeffs[[split_coef[[row]][[2]]]][fold,PC] <- "x"
+      }
+    }
+  }
+  
+  if ("GENDER" %in% rownames(coefs)){
+    elastic_high_acc_best_coeffs[["demo"]]$GENDER <- "x"
+  }
+  if ("AGE" %in% rownames(coefs)){
+    elastic_high_acc_best_coeffs[["demo"]]$AGE <- "x"
+  }
+  if ("SCANNER" %in% rownames(coefs)){
+    elastic_high_acc_best_coeffs[["demo"]]$SCANNER <- "x"
+  }
+}
+
+```
+
 ## Compare models
 
-Again, ElasticNet is our best model. Here, we explain 12% of the variance. 
+Here, ElasticNet is our best model with feature selection, explaining 12% of variance in accuracy at high load. Just as in the previous behavioral measures, Ridge regression performs best, explaining 14% of the variance. 
 
 ```{r compare models - high_acc}
 

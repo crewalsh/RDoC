@@ -40,6 +40,7 @@ source("helper_fxns/average_electrodes.R")
 source("helper_fxns/average_electrodes_spectrum.R")
 source("helper_fxns/plot_tertiles.R")
 source("helper_fxns/find_inverted_U_spectra.R")
+source("helper_fxns/time_sig_load_effects.R")
 
 ```
 
@@ -415,7 +416,74 @@ probe_P3_DFR_anova <- merge(probe_average_P3,WM_to_merge, by="PTID")
 
 ### Load Effect 
 
-We don't see any difference between load effects 
+#### Scatter plots 
+
+Here, we want to look to see uf there are any obvious relationshihps between span and ERP measures (removing any outliers). We don't see anything really strong.  
+
+```{r scatter plots span vs ERP measures}
+
+merge(cue_midOccip_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - cue n170 in midOccip")+
+  theme_classic()
+
+
+merge(probe_midOccip_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - probe n170 in midOccip")+
+  theme_classic()
+
+merge(cue_Oavg_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - cue Oavg in midOccip")+
+  theme_classic()
+
+
+merge(probe_Oavg_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - probe Oavg in midOccip")+
+  theme_classic()
+
+merge(cue_P3_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - cue P3")+
+  theme_classic()
+
+
+merge(probe_P3_DFR_anova, constructs_fMRI) %>% 
+  filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
+  filter(load_effect > mean(load_effect)-3*(sd(load_effect))) %>%  
+  ggplot(aes(x=omnibus_span_no_DFR, y = load_effect)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("Load effect - probe P3")+
+  theme_classic()
+
+```
+
+#### Bar Graphs
+
+When we plot bar graphs, we don't see any difference between load effects 
 
 ```{r plot split group ERPs - LE}
 
@@ -527,7 +595,46 @@ cue_POavg_n170_LE + probe_POavg_n170_LE+
 
 ```
 
-```{r run anovas for ERPS load effects }
+For the n170 in the cue period, low and high capacity groups are significantly different from 0, but medium capacity are not. In the probe period, no groups are significantly different from 0. 
+
+For the P3 in the cue period, all groups are significantly different from 0. In the probe, medium WMC subjects are significantly different. 
+
+```{r check if values different from zero}
+
+t_test_cue_O_n170 <- cue_Oavg_n170_DFR_anova %>% 
+  data.frame() %>%
+  group_by(level) %>% 
+  summarise(name = unique(level), res = list(t.test(load_effect,mu=0)))
+names(t_test_cue_O_n170$res) <- unique(t_test_cue_O_n170$name)
+t_test_cue_O_n170$res
+
+t_test_probe_O_n170 <- probe_Oavg_n170_DFR_anova %>% 
+  data.frame() %>%
+  group_by(level) %>% 
+  summarise(name = unique(level), res = list(t.test(load_effect,mu=0)))
+names(t_test_probe_O_n170$res) <- unique(t_test_probe_O_n170$name)
+t_test_probe_O_n170$res
+
+t_test_cue_P3 <- cue_P3_DFR_anova %>% 
+  data.frame() %>%
+  group_by(level) %>% 
+  summarise(name = unique(level), res = list(t.test(load_effect,mu=0)))
+names(t_test_cue_P3$res) <- unique(t_test_cue_P3$name)
+t_test_cue_P3$res
+
+t_test_probe_P3 <- probe_P3_DFR_anova %>% 
+  data.frame() %>%
+  group_by(level) %>% 
+  summarise(name = unique(level), res = list(t.test(load_effect,mu=0)))
+names(t_test_probe_P3$res) <- unique(t_test_probe_P3$name)
+t_test_probe_P3$res
+
+
+
+```
+
+
+```{r run anovas for ERPs load effects }
 
 cue_Oavg_n170_LE.aov <- aov(load_effect ~ level, data = cue_Oavg_n170_DFR_anova)
 print(summary(cue_Oavg_n170_LE.aov))
@@ -546,7 +653,6 @@ print(summary(probe_P3_LE.aov))
 
 ```
 
-
 # ERSPs
 
 ```{r find spectra where indiv diffs corr with span}
@@ -554,6 +660,21 @@ print(summary(probe_P3_LE.aov))
 temp_diff <- constructs_fMRI[,c(1,8)]
 
 omnibus_span_corr <- list(
+  ERSPS_midOccip_DFR = corr_spectrum_to_indiv_diff(indiv_diff = temp_diff, spectrum = ERSPS_midOccip_DFR[["data"]][["load_effect"]], spec_PTID = ERSPS_midOccip_DFR[["PTID"]], times=ERSPS_times_DFR),
+  ERSPS_Oz_DFR = corr_spectrum_to_indiv_diff(indiv_diff = temp_diff, spectrum = ERSPS_Oz_DFR[["data"]][["load_effect"]], spec_PTID = ERSPS_Oz_DFR[["PTID"]], times=ERSPS_times_DFR), 
+  
+  ERSPS_Favg_DFR = corr_spectrum_to_indiv_diff(indiv_diff = temp_diff, spectrum = ERSPS_Favg_DFR[["data"]][["load_effect"]], spec_PTID = ERSPS_Favg_DFR[["PTID"]], times=ERSPS_times_DFR) 
+)
+
+```
+
+```{r find spectra where indiv diffs corr with span squared}
+
+temp_diff <- constructs_fMRI[,c(1,8)]
+temp_diff[,2] <- temp_diff[,2]^2
+colnames(temp_diff)[2] <- "span_squared"
+
+omnibus_span_squared_corr <- list(
   ERSPS_midOccip_DFR = corr_spectrum_to_indiv_diff(indiv_diff = temp_diff, spectrum = ERSPS_midOccip_DFR[["data"]][["load_effect"]], spec_PTID = ERSPS_midOccip_DFR[["PTID"]], times=ERSPS_times_DFR),
   ERSPS_Oz_DFR = corr_spectrum_to_indiv_diff(indiv_diff = temp_diff, spectrum = ERSPS_Oz_DFR[["data"]][["load_effect"]], spec_PTID = ERSPS_Oz_DFR[["PTID"]], times=ERSPS_times_DFR), 
   
@@ -588,7 +709,6 @@ DFR_fMRI_LE_corr <- list(
 
 ```
 
-
 ## Average over all subs
 
 ```{r plot average spectra load effects}
@@ -603,8 +723,7 @@ ggplot(data=avg_ERSPS_midOccip_DFR, aes(x=Y,y=X,fill=Z))+
   ggtitle("midOccip cluster during DFR")+
   scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
   scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-  scale_fill_gradient2(low="blue",mid="white",
-                       high="red") +
+  scale_fill_gradient2(limits=c(-1.8, 1.25),breaks=seq.int(-1.5,1,0.5),low="blue",mid="white",high="red") +
   xlab("Time (ms)")+
   ylab("Frequency")+
   labs(fill="Power Load Effect")+
@@ -615,8 +734,7 @@ ggplot(data=avg_ERSPS_Oz_DFR, aes(x=Y,y=X,fill=Z))+
   ggtitle("Oz electrode during DFR")+
   scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
   scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-  scale_fill_gradient2(low="blue",mid="white",
-                       high="red") +
+  scale_fill_gradient2(limits=c(-1.8, 1.25),breaks=seq.int(-1.5,1,0.5),low="blue",mid="white",high="red") +
   xlab("Time (ms)")+
   ylab("Frequency")+
   labs(fill="Power Load Effect")+
@@ -663,8 +781,7 @@ for (group in c("high","med","low")){
     geom_vline(linetype= "dotted", xintercept = 122)+
     scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
     scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-    scale_fill_gradient2(low="blue",mid="white",
-                         high="red") +
+    scale_fill_gradient2(limits=c(-2.5, 1.75),breaks=seq.int(-2,1.5,1),low="blue",mid="white",high="red") +
     xlab("Time (ms)")+
     ylab("Frequency")+
     labs(fill="Power Load Effect")+
@@ -678,8 +795,7 @@ for (group in c("high","med","low")){
     geom_vline(linetype= "dotted", xintercept = 122)+
     scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
     scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-    scale_fill_gradient2(low="blue",mid="white",
-                         high="red") +
+    scale_fill_gradient2(limits=c(-2.5, 1.75),breaks=seq.int(-2,1.5,1),low="blue",mid="white",high="red") +
     xlab("Time (ms)")+
     ylab("Frequency")+
     labs(fill="Power Load Effect")+
@@ -693,8 +809,7 @@ for (group in c("high","med","low")){
     geom_vline(linetype= "dotted", xintercept = 122)+
     scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
     scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-    scale_fill_gradient2(low="blue",mid="white",
-                         high="red") +
+    scale_fill_gradient2(limits=c(-2.5, 1.75),breaks=seq.int(-2,1.5,1),low="blue",mid="white",high="red") +
     xlab("Time (ms)")+
     ylab("Frequency")+
     labs(fill="Power Load Effect")+
@@ -740,8 +855,7 @@ ggplot(data=inverted_U_midOccip_ERSPS, aes(x=Y,y=X,fill=Z))+
   geom_vline(linetype= "dotted", xintercept = 122)+
   scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
   scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-  scale_fill_gradient2(low="blue",mid="white",
-                       high="red") +
+  scale_fill_gradient2(limits=c(-2.5, 1.75),breaks=seq.int(-2,1.5,1),low="blue",mid="white",high="red") +
   xlab("Time (ms)")+
   ylab("Frequency")+
   labs(fill="Power Load Effect")+
@@ -755,8 +869,7 @@ ggplot(data=inverted_U_Oz_ERSPS, aes(x=Y,y=X,fill=Z))+
   geom_vline(linetype= "dotted", xintercept = 122)+
   scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
   scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
-  scale_fill_gradient2(low="blue",mid="white",
-                       high="red") +
+  scale_fill_gradient2(limits=c(-2.5, 1.75),breaks=seq.int(-2,1.5,1),low="blue",mid="white",high="red") +
   xlab("Time (ms)")+
   ylab("Frequency")+
   labs(fill="Power Load Effect")+
@@ -765,6 +878,8 @@ ggplot(data=inverted_U_Oz_ERSPS, aes(x=Y,y=X,fill=Z))+
 ```
 
 ## Correlation to Omnibus Span
+
+All correlations below are calculated robustly, such that outliers in EEG data > 3SD above or below the mean are removed. 
 
 Mid occipital cluster shows a positive correlation with span during the encoding and delay period in the beta and low gamma bands, and a negative correlation in the theta through alpha bands during the entire task, but most prominently right at the beginning of the probe period. 
 
@@ -823,6 +938,80 @@ ggplot(data=omnibus_span_corr[["ERSPS_midOccip_DFR"]][["thresholded_plot"]],aes(
   theme_classic()
 
 ggplot(data=omnibus_span_corr[["ERSPS_Oz_DFR"]][["thresholded_plot"]],aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("Oz electrode during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Correlation")+
+  theme_classic()
+
+```
+
+## Correlation to span squared
+
+```{r plot frequency spectrum corr to omnibus span squared}
+
+
+ggplot(data=omnibus_span_squared_corr[["ERSPS_midOccip_DFR"]][["plot"]],aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("midOccip cluster during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Correlation")+
+  theme_classic()
+
+ggplot(data=omnibus_span_squared_corr[["ERSPS_Oz_DFR"]][["plot"]],aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("Oz electrode during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Correlation")+
+  theme_classic()
+
+```
+
+With span squared (a relative proxy for an inverted U shaped relationship), we do see a positive correlation of around 0.18 in the alpha band around the end of encoding survive FDR correction. 
+
+```{r plot frequency spectrum corr to omnibus span squared - thresholded}
+
+ggplot(data=omnibus_span_squared_corr[["ERSPS_midOccip_DFR"]][["thresholded_plot"]],aes(x=Y,y=X,fill=Z))+
+  geom_tile()+
+  ggtitle("midOccip cluster during DFR")+
+  geom_vline(linetype = "dotted",xintercept = 11)+
+  geom_vline(linetype = "dotted", xintercept = 61)+
+  geom_vline(linetype= "dotted", xintercept = 122)+
+  scale_y_continuous(labels = function(x){return(round(ERSPS_freqs[x+1], digits=2))},breaks = seq(0, 76, by = 5))+
+  scale_x_continuous(labels = function(x){return(ERSPS_times_DFR[x+1])}, breaks = seq(0,150, by = 25))+
+  scale_fill_gradient2(low="blue",mid="white",
+                       high="red") +
+  xlab("Time (ms)")+
+  ylab("Frequency")+
+  labs(fill="Correlation")+
+  theme_classic()
+
+
+ggplot(data=omnibus_span_squared_corr[["ERSPS_Oz_DFR"]][["thresholded_plot"]],aes(x=Y,y=X,fill=Z))+
   geom_tile()+
   ggtitle("Oz electrode during DFR")+
   geom_vline(linetype = "dotted",xintercept = 11)+
@@ -911,7 +1100,7 @@ ggplot(data=DFR_L3_acc_corr[["ERSPS_Oz_DFR"]][["thresholded_plot"]],aes(x=Y,y=X,
 
 ## Correlation to DFR fMRI load effect
 
-There seems to be a strong correlation between fMRI load effect and power in the alpha and beta band across electrodes, particularly during encoding.
+There seems to be a strong correlation between fMRI load effect and power in the alpha and beta band across electrodes, particularly during encoding, though it doesn't survive FDR correction.
 
 ```{r plot frequency spectrum corr to fMRI LE}
 
@@ -1004,6 +1193,42 @@ alpha <- list(
     load_effect = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]][26:38,,], c(2,3), mean))))
 )
 
+low_alpha <- list(
+  
+  ERSPS_midOccip_DFR = list(
+    high_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["high_load"]][26:32,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["low_load"]][26:32,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["load_effect"]][26:32,,], c(2,3), mean)))),  
+  
+  ERSPS_Favg_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["high_load"]][26:32,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["low_load"]][26:32,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["load_effect"]][26:32,,], c(2,3), mean)))),  
+  
+  ERSPS_Oz_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["high_load"]][26:32,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["low_load"]][26:32,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]][26:32,,], c(2,3), mean))))
+)
+
+high_alpha <- list(
+  
+  ERSPS_midOccip_DFR = list(
+    high_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["high_load"]][32:38,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["low_load"]][32:38,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["load_effect"]][32:38,,], c(2,3), mean)))),  
+  
+  ERSPS_Favg_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["high_load"]][32:38,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["low_load"]][32:38,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["load_effect"]][32:38,,], c(2,3), mean)))),  
+  
+  ERSPS_Oz_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["high_load"]][32:38,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["low_load"]][32:38,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]][32:38,,], c(2,3), mean))))
+)
+
 beta <- list(
   
   ERSPS_midOccip_DFR = list(
@@ -1062,6 +1287,44 @@ alpha_list <- list(
     load_effect = apply(alpha[["ERSPS_Favg_DFR"]][["load_effect"]][,2:153], 2, mean),
     time = ERSPS_times_DFR)
 )
+
+
+low_alpha_list <- list(
+  ERSPS_midOccip_DFR = data.frame(
+    high_load = apply(low_alpha[["ERSPS_midOccip_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(low_alpha[["ERSPS_midOccip_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(low_alpha[["ERSPS_midOccip_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),  
+  ERSPS_Oz_DFR = data.frame(
+    high_load = apply(low_alpha[["ERSPS_Oz_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(low_alpha[["ERSPS_Oz_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(low_alpha[["ERSPS_Oz_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),
+  ERSPS_Favg_DFR = data.frame(
+    high_load = apply(low_alpha[["ERSPS_Favg_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(low_alpha[["ERSPS_Favg_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(low_alpha[["ERSPS_Favg_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR)
+)
+
+high_alpha_list <- list(
+  ERSPS_midOccip_DFR = data.frame(
+    high_load = apply(high_alpha[["ERSPS_midOccip_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(high_alpha[["ERSPS_midOccip_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(high_alpha[["ERSPS_midOccip_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),  
+  ERSPS_Oz_DFR = data.frame(
+    high_load = apply(high_alpha[["ERSPS_Oz_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(high_alpha[["ERSPS_Oz_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(high_alpha[["ERSPS_Oz_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),
+  ERSPS_Favg_DFR = data.frame(
+    high_load = apply(high_alpha[["ERSPS_Favg_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(high_alpha[["ERSPS_Favg_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(high_alpha[["ERSPS_Favg_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR)
+)
+
 beta_list <- list(
   ERSPS_midOccip_DFR = data.frame(
     high_load = apply(beta[["ERSPS_midOccip_DFR"]][["high_load"]][,2:153], 2, mean),
@@ -1104,6 +1367,8 @@ low_gamma_list <- list(
 ```{r make indiv frequency plots}
 
 alpha_plot_list <- list()
+low_alpha_plot_list <- list()
+high_alpha_plot_list <- list()
 beta_plot_list <- list()
 low_gamma_plot_list <- list()
 
@@ -1117,6 +1382,24 @@ for (cluster in seq.int(1,length(alpha))){
     scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
     theme_classic()
   
+  low_alpha_plot_list[[names(low_alpha_list)[cluster]]][["indiv_loads"]] <- ggplot(data = low_alpha_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=high_load))+
+    geom_line(aes(x=time,y=low_load),linetype="dotted")+
+    ylab("Low Alpha power")+
+    ggtitle("Low Load vs High Load")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()
+  
+  high_alpha_plot_list[[names(high_alpha_list)[cluster]]][["indiv_loads"]] <- ggplot(data = high_alpha_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=high_load))+
+    geom_line(aes(x=time,y=high_load),linetype="dotted")+
+    ylab("High Alpha power")+
+    ggtitle("Low Load vs High Load")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()
+  
   alpha_plot_list[[names(alpha_list)[cluster]]][["LE"]] <- ggplot(data = alpha_list[[cluster]])+
     geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
     geom_line(aes(x=time,y=load_effect))+
@@ -1125,6 +1408,21 @@ for (cluster in seq.int(1,length(alpha))){
     scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
     theme_classic()
   
+  low_alpha_plot_list[[names(low_alpha_list)[cluster]]][["LE"]] <- ggplot(data = low_alpha_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=load_effect))+
+    ylab("low_alpha power")+
+    ggtitle("Load Effect")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()
+  
+  high_alpha_plot_list[[names(high_alpha_list)[cluster]]][["LE"]] <- ggplot(data = high_alpha_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=load_effect))+
+    ylab("high_alpha power")+
+    ggtitle("Load Effect")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()  
 }
 
 for (cluster in seq.int(1,length(beta))){
@@ -1186,17 +1484,63 @@ alpha_plot_list[["ERSPS_Oz_DFR"]][["indiv_loads"]] + alpha_plot_list[["ERSPS_Oz_
 
 ``` 
 
+We only want to average over time points with signficant load effects, so pull those out. For the delay period, we're only looking at early delay period.
+
+```{r select out times with significant load effects - alpha}
+
+alpha_mid_occip_times <- time_sig_load_effects(alpha[["ERSPS_midOccip_DFR"]][["load_effect"]], ERSPS_times_DFR)
+alpha_Oz_times <- time_sig_load_effects(alpha[["ERSPS_Oz_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+high_alpha_mid_occip_times <- time_sig_load_effects(high_alpha[["ERSPS_midOccip_DFR"]][["load_effect"]], ERSPS_times_DFR)
+high_alpha_Oz_times <- time_sig_load_effects(high_alpha[["ERSPS_Oz_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+low_alpha_mid_occip_times <- time_sig_load_effects(low_alpha[["ERSPS_midOccip_DFR"]][["load_effect"]], ERSPS_times_DFR)
+low_alpha_Oz_times <- time_sig_load_effects(low_alpha[["ERSPS_Oz_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+```
 
 ```{r select out cue delay probe from alpha}
 
-alpha_cue_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],0,2531.25,ERSPS_times_DFR)
-alpha_cue_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],0,2531.25,ERSPS_times_DFR)
+alpha_cue_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],843.75000,2531.25,ERSPS_times_DFR)
+alpha_cue_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],1140.62500,2531.25,ERSPS_times_DFR)
 
-alpha_delay_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
-alpha_delay_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
+alpha_delay_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],2531.25,3175.78125,ERSPS_times_DFR)
+alpha_delay_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],2531.25,3078.12500,ERSPS_times_DFR)
 
-alpha_probe_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],5511.71875,7000,ERSPS_times_DFR)
-alpha_probe_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],5511.71875,7000,ERSPS_times_DFR)
+alpha_probe_average_midOccip <- select_period_average(alpha[["ERSPS_midOccip_DFR"]],6007.81250,6800.78125,ERSPS_times_DFR)
+alpha_probe_average_Oz <- select_period_average(alpha[["ERSPS_Oz_DFR"]],6007.81250,6902.34375,ERSPS_times_DFR)
+
+
+```
+
+```{r select out cue delay probe from low_alpha}
+
+low_alpha_cue_average_midOccip <- select_period_average(low_alpha[["ERSPS_midOccip_DFR"]],890.62500,2531.25,ERSPS_times_DFR)
+low_alpha_cue_average_Oz <- select_period_average(low_alpha[["ERSPS_Oz_DFR"]],1390.62500,2531.25,ERSPS_times_DFR)
+
+low_alpha_delay_average_midOccip <- select_period_average(low_alpha[["ERSPS_midOccip_DFR"]],2531.25,3324.21875,ERSPS_times_DFR)
+low_alpha_delay_average_Oz <- select_period_average(low_alpha[["ERSPS_Oz_DFR"]],2531.25,3226.56250,ERSPS_times_DFR)
+
+low_alpha_probe_average_midOccip <- select_period_average(low_alpha[["ERSPS_midOccip_DFR"]],6007.81250,6851.56250,ERSPS_times_DFR)
+low_alpha_probe_average_Oz <- select_period_average(low_alpha[["ERSPS_Oz_DFR"]],5910.15625,7000.00000,ERSPS_times_DFR)
+
+
+```
+
+```{r select out cue delay probe from high_alpha}
+
+high_alpha_cue_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],792.96875,2531.25,ERSPS_times_DFR)
+high_alpha_cue_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],1042.96875,2531.25,ERSPS_times_DFR)
+
+high_alpha_delay_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],2531.25,3078.12500,ERSPS_times_DFR)
+high_alpha_delay_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],2531.25,2976.56250,ERSPS_times_DFR)
+
+high_alpha_late_delay_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],3375.00000,5261.71875,ERSPS_times_DFR)
+high_alpha_late_delay_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],3226.56250,	
+5261.71875,ERSPS_times_DFR)
+
+high_alpha_probe_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],6007.81250,6800.78125,ERSPS_times_DFR)
+high_alpha_probe_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],6058.59375,6851.56250,ERSPS_times_DFR)
 
 
 ```
@@ -1232,6 +1576,12 @@ colnames(alpha_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_Oz", "probe_m
 alpha_behav <- merge(ERSP_behav_corr_data,alpha_data, by = "PTID")
 
 for (col in seq.int(5,9)){
+  alpha_behav[((alpha_behav[,col] > mean(alpha_behav[,col])+3*sd(alpha_behav[,col])) | 
+                 (alpha_behav[,col] < mean(alpha_behav[,col])-3*sd(alpha_behav[,col]))), col] <- NA
+}
+
+
+for (col in seq.int(5,9)){
   print(ggplot(data = alpha_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(alpha_behav)[col]))+
           geom_point()+
           stat_smooth(method="lm")+
@@ -1249,6 +1599,8 @@ for (col in seq.int(5,9)){
 
 alphas_for_plot <- list()
 betas_for_plot <- list()
+low_alphas_for_plot <- list()
+high_alphas_for_plot <- list()
 low_gammas_for_plot <- list()
 load_list <- c("low_load", "high_load", "load_effect")
 ERSPS_list <- list( 
@@ -1264,6 +1616,30 @@ for (cluster in seq.int(1,2)){
     alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_LCD)
   } else{
     alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_DFR)
+  }
+}
+
+for (cluster in seq.int(1,2)){
+  temp <- list()
+  for (load in seq.int(1,3)){
+    temp[[load_list[load]]] <- low_alpha[[cluster]][[load]]
+  }
+  if (substr(names(low_alpha)[cluster],nchar(names(low_alpha)[cluster])-4,nchar(names(low_alpha)[cluster])-2) == "LCD"){
+    low_alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_LCD)
+  } else{
+    low_alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_DFR)
+  }
+}
+
+for (cluster in seq.int(1,2)){
+  temp <- list()
+  for (load in seq.int(1,3)){
+    temp[[load_list[load]]] <- high_alpha[[cluster]][[load]]
+  }
+  if (substr(names(high_alpha)[cluster],nchar(names(high_alpha)[cluster])-4,nchar(names(high_alpha)[cluster])-2) == "LCD"){
+    high_alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_LCD)
+  } else{
+    high_alphas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups_no_EEG, ERSPS_times_DFR)
   }
 }
 
@@ -1304,10 +1680,14 @@ We also can see an inverted U shape during the delay period in the Oz electrode,
 ```{r prep split ERSPs for plots}
 
 split_alphas_plot <- create_TC_for_plot(alphas_for_plot)
+split_low_alphas_plot <- create_TC_for_plot(low_alphas_for_plot)
+split_high_alphas_plot <- create_TC_for_plot(high_alphas_for_plot)
 split_betas_plot <- create_TC_for_plot(betas_for_plot)
 split_low_gammas_plot <- create_TC_for_plot(low_gammas_for_plot)
 
 ```
+
+#### All Alpha
 
 ```{r plot alpha by groups}
 
@@ -1371,7 +1751,7 @@ alpha_cue_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_cue_Oz_LE
 
@@ -1383,7 +1763,7 @@ alpha_cue_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_cue_midOccip_LE
 
@@ -1395,7 +1775,7 @@ alpha_delay_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_delay_Oz_LE
 
@@ -1407,7 +1787,7 @@ alpha_delay_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_delay_midOccip_LE
 
@@ -1419,7 +1799,7 @@ alpha_probe_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_probe_Oz_LE
 
@@ -1431,7 +1811,7 @@ alpha_probe_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> alpha_probe_midOccip_LE
 
@@ -1468,6 +1848,375 @@ print(summary(alpha_delay_Oz.aov))
 ```
 
 
+#### Low alpha
+
+```{r plot low_alpha by groups}
+
+midOccip_DFR_low_alpha <- paired_freq_plot(split_low_alphas_plot[["ERSPS_midOccip_DFR"]][["long"]], c("high","low", "load_effect"))
+
+Oz_DFR_low_alpha <- paired_freq_plot(split_low_alphas_plot[["ERSPS_Oz_DFR"]][["long"]], c("high","low", "load_effect"))
+
+midOccip_DFR_low_alpha[[1]] + midOccip_DFR_low_alpha[[2]]+
+  plot_annotation(title="midOccip - low_alpha during DFR")+
+  plot_layout(guides="collect")
+
+Oz_DFR_low_alpha[[1]] + Oz_DFR_low_alpha[[2]]+
+  plot_annotation(title="Oz - low_alpha during DFR")+
+  plot_layout(guides="collect")
+
+```
+
+```{r prep low_alpha for bar plots}
+
+low_alpha_cue_Oz_DFR_split <- split_into_groups(low_alpha_cue_average_Oz, WM_groups_no_EEG)
+low_alpha_cue_midOccip_DFR_split <- split_into_groups(low_alpha_cue_average_midOccip, WM_groups_no_EEG)
+
+low_alpha_delay_Oz_DFR_split <- split_into_groups(low_alpha_delay_average_Oz, WM_groups_no_EEG)
+low_alpha_delay_midOccip_DFR_split <- split_into_groups(low_alpha_delay_average_midOccip, WM_groups_no_EEG)
+
+low_alpha_probe_Oz_DFR_split <- split_into_groups(low_alpha_probe_average_Oz, WM_groups_no_EEG)
+low_alpha_probe_midOccip_DFR_split <- split_into_groups(low_alpha_probe_average_midOccip, WM_groups_no_EEG)
+
+low_alpha_cue_Oz_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_cue_Oz_DFR_split)
+low_alpha_cue_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_cue_midOccip_DFR_split)
+
+
+low_alpha_delay_Oz_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_delay_Oz_DFR_split)
+low_alpha_delay_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_delay_midOccip_DFR_split)
+
+
+low_alpha_probe_Oz_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_probe_Oz_DFR_split)
+low_alpha_probe_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(low_alpha_probe_midOccip_DFR_split)
+
+```
+
+```{r prep anovas for low_alpha}
+
+low_alpha_cue_midOccip_DFR_anova <- merge(low_alpha_cue_average_midOccip,WM_to_merge, by="PTID")
+low_alpha_delay_midOccip_DFR_anova <- merge(low_alpha_delay_average_midOccip,WM_to_merge, by="PTID")
+low_alpha_probe_midOccip_DFR_anova <- merge(low_alpha_probe_average_midOccip,WM_to_merge, by="PTID")
+
+low_alpha_cue_Oz_DFR_anova <- merge(low_alpha_cue_average_Oz,WM_to_merge, by="PTID")
+low_alpha_delay_Oz_DFR_anova <- merge(low_alpha_delay_average_Oz,WM_to_merge, by="PTID")
+low_alpha_probe_Oz_DFR_anova <- merge(low_alpha_probe_average_Oz,WM_to_merge, by="PTID")
+
+```
+
+```{r plot split group low_alpha - load effects}
+
+low_alpha_cue_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_cue_Oz_LE
+
+low_alpha_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_cue_midOccip_LE
+
+low_alpha_delay_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Delay")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_delay_Oz_LE
+
+low_alpha_delay_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Delay")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_delay_midOccip_LE
+
+low_alpha_probe_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Probe")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_probe_Oz_LE
+
+low_alpha_probe_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Probe")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> low_alpha_probe_midOccip_LE
+
+low_alpha_cue_Oz_LE + low_alpha_delay_Oz_LE + low_alpha_probe_Oz_LE+
+  plot_annotation(title="Oz electrode low_alpha frequency Load Effect during DFR")
+
+low_alpha_cue_midOccip_LE + low_alpha_delay_midOccip_LE + low_alpha_probe_midOccip_LE+
+  plot_annotation(title="midOccip cluster low_alpha frequency Load Effect during DFR")
+
+```
+
+```{r run anovas for low_alpha - load effect}
+
+low_alpha_cue_midOccip.aov <- aov(load_effect ~ level, data = low_alpha_cue_midOccip_DFR_anova)
+print("low_alpha - cue midOccip")
+print(summary(low_alpha_cue_midOccip.aov))
+low_alpha_delay_midOccip.aov <- aov(load_effect ~ level, data = low_alpha_delay_midOccip_DFR_anova)
+print("low_alpha - delay midOccip")
+
+print(summary(low_alpha_delay_midOccip.aov))
+low_alpha_probe_midOccip.aov <- aov(load_effect ~ level, data = low_alpha_probe_midOccip_DFR_anova)
+print("low_alpha - probe midOccip")
+
+
+low_alpha_cue_Oz.aov <- aov(load_effect ~ level, data = low_alpha_cue_Oz_DFR_anova)
+print("low_alpha - cue Oz")
+
+print(summary(low_alpha_cue_Oz.aov))
+low_alpha_delay_Oz.aov <- aov(load_effect ~ level, data = low_alpha_delay_Oz_DFR_anova)
+print("low_alpha - delay Oz")
+
+print(summary(low_alpha_delay_Oz.aov))
+
+```
+
+#### High alpha
+
+```{r plot high_alpha by groups}
+
+midOccip_DFR_high_alpha <- paired_freq_plot(split_high_alphas_plot[["ERSPS_midOccip_DFR"]][["long"]], c("high","low", "load_effect"))
+
+Oz_DFR_high_alpha <- paired_freq_plot(split_high_alphas_plot[["ERSPS_Oz_DFR"]][["long"]], c("high","low", "load_effect"))
+
+midOccip_DFR_high_alpha[[1]] + midOccip_DFR_high_alpha[[2]]+
+  plot_annotation(title="midOccip - high_alpha during DFR")+
+  plot_layout(guides="collect")
+
+Oz_DFR_high_alpha[[1]] + Oz_DFR_high_alpha[[2]]+
+  plot_annotation(title="Oz - high_alpha during DFR")+
+  plot_layout(guides="collect")
+
+```
+
+```{r prep high_alpha for bar plots}
+
+high_alpha_cue_Oz_DFR_split <- split_into_groups(high_alpha_cue_average_Oz, WM_groups_no_EEG)
+high_alpha_cue_midOccip_DFR_split <- split_into_groups(high_alpha_cue_average_midOccip, WM_groups_no_EEG)
+
+high_alpha_delay_Oz_DFR_split <- split_into_groups(high_alpha_delay_average_Oz, WM_groups_no_EEG)
+high_alpha_delay_midOccip_DFR_split <- split_into_groups(high_alpha_delay_average_midOccip, WM_groups_no_EEG)
+
+high_alpha_late_delay_Oz_DFR_split <- split_into_groups(high_alpha_late_delay_average_Oz, WM_groups_no_EEG)
+high_alpha_late_delay_midOccip_DFR_split <- split_into_groups(high_alpha_late_delay_average_midOccip, WM_groups_no_EEG)
+
+high_alpha_probe_Oz_DFR_split <- split_into_groups(high_alpha_probe_average_Oz, WM_groups_no_EEG)
+high_alpha_probe_midOccip_DFR_split <- split_into_groups(high_alpha_probe_average_midOccip, WM_groups_no_EEG)
+
+high_alpha_cue_Oz_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_cue_Oz_DFR_split)
+high_alpha_cue_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_cue_midOccip_DFR_split)
+
+high_alpha_delay_Oz_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_delay_Oz_DFR_split)
+high_alpha_delay_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_delay_midOccip_DFR_split)
+
+high_alpha_late_delay_Oz_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_late_delay_Oz_DFR_split)
+high_alpha_late_delay_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_late_delay_midOccip_DFR_split)
+
+high_alpha_probe_Oz_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_probe_Oz_DFR_split)
+high_alpha_probe_midOccip_DFR_split_prepped <- prep_split_for_bar_plots(high_alpha_probe_midOccip_DFR_split)
+
+```
+
+```{r prep anovas for high_alpha}
+
+high_alpha_cue_midOccip_DFR_anova <- merge(high_alpha_cue_average_midOccip,WM_to_merge, by="PTID")
+high_alpha_delay_midOccip_DFR_anova <- merge(high_alpha_delay_average_midOccip,WM_to_merge, by="PTID")
+high_alpha_late_delay_midOccip_DFR_anova <- merge(high_alpha_late_delay_average_midOccip,WM_to_merge, by="PTID")
+high_alpha_probe_midOccip_DFR_anova <- merge(high_alpha_probe_average_midOccip,WM_to_merge, by="PTID")
+
+high_alpha_cue_Oz_DFR_anova <- merge(high_alpha_cue_average_Oz,WM_to_merge, by="PTID")
+high_alpha_delay_Oz_DFR_anova <- merge(high_alpha_delay_average_Oz,WM_to_merge, by="PTID")
+high_alpha_late_delay_Oz_DFR_anova <- merge(high_alpha_late_delay_average_Oz,WM_to_merge, by="PTID")
+high_alpha_probe_Oz_DFR_anova <- merge(high_alpha_probe_average_Oz,WM_to_merge, by="PTID")
+
+```
+
+None of these are signficant - only caveat is that I haven't removed outliers, because I wasn't sure at what level to remove them from - averages over time? at each time point? 
+
+```{r plot split group high_alpha - load effects}
+
+high_alpha_cue_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_cue_Oz_LE
+
+high_alpha_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_cue_midOccip_LE
+
+high_alpha_delay_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Delay")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_delay_Oz_LE
+
+high_alpha_delay_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Delay")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_delay_midOccip_LE
+
+high_alpha_late_delay_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Late Delay - Oz")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_late_delay_Oz_LE
+
+high_alpha_late_delay_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Late Delay - Mid Occipital")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_late_delay_midOccip_LE
+
+high_alpha_probe_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Probe")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_probe_Oz_LE
+
+high_alpha_probe_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Probe")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> high_alpha_probe_midOccip_LE
+
+high_alpha_cue_Oz_LE + high_alpha_delay_Oz_LE + high_alpha_probe_Oz_LE+
+  plot_annotation(title="Oz electrode high alpha frequency Load Effect during DFR")
+
+high_alpha_late_delay_Oz_LE
+
+high_alpha_cue_midOccip_LE + high_alpha_delay_midOccip_LE + high_alpha_probe_midOccip_LE+
+  plot_annotation(title="midOccip cluster high alpha frequency Load Effect during DFR")
+
+high_alpha_late_delay_midOccip_LE
+
+
+```
+
+```{r run anovas for high_alpha - load effect}
+
+high_alpha_cue_midOccip.aov <- aov(load_effect ~ level, data = high_alpha_cue_midOccip_DFR_anova)
+print("high_alpha - cue midOccip")
+print(summary(high_alpha_cue_midOccip.aov))
+
+high_alpha_delay_midOccip.aov <- aov(load_effect ~ level, data = high_alpha_delay_midOccip_DFR_anova)
+print("high_alpha - delay midOccip")
+print(summary(high_alpha_delay_midOccip.aov))
+
+high_alpha_late_delay_midOccip.aov <- aov(load_effect ~ level, data = high_alpha_late_delay_midOccip_DFR_anova)
+print("high_alpha - late delay midOccip")
+print(summary(high_alpha_late_delay_midOccip.aov))
+
+high_alpha_probe_midOccip.aov <- aov(load_effect ~ level, data = high_alpha_probe_midOccip_DFR_anova)
+print("high_alpha - probe midOccip")
+print(summary(high_alpha_probe_midOccip.aov))
+
+high_alpha_cue_Oz.aov <- aov(load_effect ~ level, data = high_alpha_cue_Oz_DFR_anova)
+print("high_alpha - cue Oz")
+print(summary(high_alpha_cue_Oz.aov))
+
+high_alpha_delay_Oz.aov <- aov(load_effect ~ level, data = high_alpha_delay_Oz_DFR_anova)
+print("high_alpha - delay Oz")
+print(summary(high_alpha_delay_Oz.aov))
+
+high_alpha_late_delay_Oz.aov <- aov(load_effect ~ level, data = high_alpha_late_delay_Oz_DFR_anova)
+print("high_alpha - late delay Oz")
+print(summary(high_alpha_late_delay_Oz.aov))
+
+high_alpha_late_delay_Oz.aov <- aov(load_effect ~ level, data = high_alpha_late_delay_Oz_DFR_anova)
+print("high_alpha - late delay Oz")
+print(summary(high_alpha_late_delay_Oz.aov))
+
+```
+
 ## Beta 
 
 ### All Subjects
@@ -1483,18 +2232,23 @@ beta_plot_list[["ERSPS_Oz_DFR"]][["indiv_loads"]] + beta_plot_list[["ERSPS_Oz_DF
   plot_annotation(title="Oz - beta during DFR")
 
 ``` 
+```{r select out times with significant load effects - beta}
 
+beta_mid_occip_times <- time_sig_load_effects(beta[["ERSPS_midOccip_DFR"]][["load_effect"]], ERSPS_times_DFR)
+beta_Oz_times <- time_sig_load_effects(beta[["ERSPS_Oz_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+```
 
 ```{r select out cue delay probe from beta}
 
-beta_cue_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],0,2531.25,ERSPS_times_DFR)
-beta_cue_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],0,2531.25,ERSPS_times_DFR)
+beta_cue_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],890.62500,2531.25,ERSPS_times_DFR)
+beta_cue_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],1089.84375,2531.25,ERSPS_times_DFR)
 
-beta_delay_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
-beta_delay_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
+beta_delay_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],2531.25,3128.90625,ERSPS_times_DFR)
+beta_delay_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],2531.25,2878.90625,ERSPS_times_DFR)
 
-beta_probe_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],5511.71875,7000,ERSPS_times_DFR)
-beta_probe_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],5511.71875,7000,ERSPS_times_DFR)
+beta_probe_average_midOccip <- select_period_average(beta[["ERSPS_midOccip_DFR"]],5757.81250,6800.78125,ERSPS_times_DFR)
+beta_probe_average_Oz <- select_period_average(beta[["ERSPS_Oz_DFR"]],6007.81250,6800.78125,ERSPS_times_DFR)
 
 ```
 
@@ -1514,13 +2268,18 @@ t.test(beta_probe_average_Oz$load_effect,mu=0)
 ```{r correlate span to beta load effects}
 
 beta_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
-                     list(beta_cue_average_midOccip[,c(1,4)], beta_cue_average_Oz[,c(1,4)],
-                          beta_delay_average_midOccip[,c(1,4)],beta_delay_average_Oz[,c(1,4)],
-                          beta_probe_average_midOccip[,c(1,4)],
-                          beta_probe_average_Oz[,c(1,4)]))
+                    list(beta_cue_average_midOccip[,c(1,4)], beta_cue_average_Oz[,c(1,4)],
+                         beta_delay_average_midOccip[,c(1,4)],beta_delay_average_Oz[,c(1,4)],
+                         beta_probe_average_midOccip[,c(1,4)],
+                         beta_probe_average_Oz[,c(1,4)]))
 colnames(beta_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz")
 
 beta_behav <- merge(ERSP_behav_corr_data,beta_data, by = "PTID")
+
+for (col in seq.int(5,9)){
+  beta_behav[((beta_behav[,col] > mean(beta_behav[,col])+3*sd(beta_behav[,col])) | 
+                (beta_behav[,col] < mean(beta_behav[,col])-3*sd(beta_behav[,col]))), col] <- NA
+}
 
 for (col in seq.int(5,10)){
   print(ggplot(data = beta_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(beta_behav)[col]))+
@@ -1599,7 +2358,7 @@ beta_cue_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_cue_Oz_LE
 
@@ -1611,7 +2370,7 @@ beta_cue_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_cue_midOccip_LE
 
@@ -1623,7 +2382,7 @@ beta_delay_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_delay_Oz_LE
 
@@ -1635,7 +2394,7 @@ beta_delay_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_delay_midOccip_LE
 
@@ -1647,7 +2406,7 @@ beta_probe_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_probe_Oz_LE
 
@@ -1659,7 +2418,7 @@ beta_probe_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> beta_probe_midOccip_LE
 
@@ -1679,6 +2438,11 @@ print(summary(beta_cue_midOccip.aov))
 beta_delay_midOccip.aov <- aov(load_effect ~ level, data = beta_delay_midOccip_DFR_anova)
 print("beta - delay midOccip")
 print(summary(beta_delay_midOccip.aov))
+
+beta_probe_midOccip.aov <- aov(load_effect ~ level, data = beta_probe_midOccip_DFR_anova)
+print("beta - probe midOccip")
+print(summary(beta_probe_midOccip.aov))
+
 
 beta_cue_Oz.aov <- aov(load_effect ~ level, data = beta_cue_Oz_DFR_anova)
 print("beta - cue Oz")
@@ -1706,16 +2470,23 @@ low_gamma_plot_list[["ERSPS_Oz_DFR"]][["indiv_loads"]] + low_gamma_plot_list[["E
 
 ``` 
 
+```{r select out times with significant load effects - low_gamma}
+
+low_gamma_mid_occip_times <- time_sig_load_effects(low_gamma[["ERSPS_midOccip_DFR"]][["load_effect"]], ERSPS_times_DFR)
+low_gamma_Oz_times <- time_sig_load_effects(low_gamma[["ERSPS_Oz_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+```
+
 ```{r select out cue delay probe from low_gamma}
 
-low_gamma_cue_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],0,2531.25,ERSPS_times_DFR)
-low_gamma_cue_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],0,2531.25,ERSPS_times_DFR)
+low_gamma_cue_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],496.09375,742.18750,ERSPS_times_DFR)
+low_gamma_cue_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],1437.50000,2433.59375,ERSPS_times_DFR)
 
-low_gamma_delay_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
-low_gamma_delay_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],2531.25,5511.71875,ERSPS_times_DFR)
+low_gamma_delay_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],2582.03125,3078.12500,ERSPS_times_DFR)
+low_gamma_delay_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],2878.90625,3175.78125,ERSPS_times_DFR)
 
-low_gamma_probe_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],5511.71875,7000,ERSPS_times_DFR)
-low_gamma_probe_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],5511.71875,7000,ERSPS_times_DFR)
+low_gamma_probe_average_midOccip <- select_period_average(low_gamma[["ERSPS_midOccip_DFR"]],5609.37500,6800.78125,ERSPS_times_DFR)
+low_gamma_probe_average_Oz <- select_period_average(low_gamma[["ERSPS_Oz_DFR"]],5660.15625,6652.34375,ERSPS_times_DFR)
 
 ```
 
@@ -1736,14 +2507,20 @@ t.test(low_gamma_probe_average_Oz$load_effect,mu=0)
 ```{r correlate span to low_gamma load effects}
 
 low_gamma_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
-                     list(low_gamma_delay_average_Oz[,c(1,4)],
-                          low_gamma_probe_average_midOccip[,c(1,4)],
-                          low_gamma_probe_average_Oz[,c(1,4)]))
-colnames(low_gamma_data) <- c("PTID", "delay_Oz", "probe_midOccip", "probe_Oz")
+                         list(low_gamma_cue_average_midOccip[,c(1,4)], low_gamma_cue_average_Oz[,c(1,4)],
+                              low_gamma_delay_average_midOccip[,c(1,4)],low_gamma_delay_average_Oz[,c(1,4)],
+                              low_gamma_probe_average_midOccip[,c(1,4)],
+                              low_gamma_probe_average_Oz[,c(1,4)]))
+colnames(low_gamma_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz")
 
 low_gamma_behav <- merge(ERSP_behav_corr_data,low_gamma_data, by = "PTID")
 
-for (col in seq.int(5,7)){
+for (col in seq.int(5,9)){
+  low_gamma_behav[((low_gamma_behav[,col] > mean(low_gamma_behav[,col])+3*sd(low_gamma_behav[,col])) | 
+                     (low_gamma_behav[,col] < mean(low_gamma_behav[,col])-3*sd(low_gamma_behav[,col]))), col] <- NA
+}
+
+for (col in seq.int(5,10)){
   print(ggplot(data = low_gamma_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(low_gamma_behav)[col]))+
           geom_point()+
           stat_smooth(method="lm")+
@@ -1824,7 +2601,7 @@ low_gamma_cue_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_cue_Oz_LE
 
@@ -1836,7 +2613,7 @@ low_gamma_cue_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Cue")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_cue_midOccip_LE
 
@@ -1848,7 +2625,7 @@ low_gamma_delay_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_delay_Oz_LE
 
@@ -1860,7 +2637,7 @@ low_gamma_delay_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Delay")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_delay_midOccip_LE
 
@@ -1872,7 +2649,7 @@ low_gamma_probe_Oz_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_probe_Oz_LE
 
@@ -1884,7 +2661,7 @@ low_gamma_probe_midOccip_DFR_split_prepped[["melt_data"]] %>%
   geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
   ggtitle("Probe")+ 
   xlab("WMC")+
-  ylab("ERP amplitude")+
+  ylab("ERP amplitude LE")+
   theme_classic()+
   theme(aspect.ratio = 1) -> low_gamma_probe_midOccip_LE
 
@@ -1895,7 +2672,6 @@ low_gamma_cue_midOccip_LE + low_gamma_delay_midOccip_LE + low_gamma_probe_midOcc
   plot_annotation(title="midOccip cluster low_gamma frequency Load Effect during DFR")
 
 ```
-
 
 ```{r run anovas for low_gamma - load effect}
 
@@ -2211,7 +2987,7 @@ p200_delay_DFR$PTID <- p200_delay_avgs$PTID
 
 fMRI_measures <- Reduce(function(x,y) merge(x,y,by="PTID"), 
                         list(p200_delay_DFR, p200_FFA, p200_cue_avgs))
-  
+
 fMRI_measures$CUE_L1_avg <- rowMeans(cbind(fMRI_measures$R_CUE_L1,fMRI_measures$L_CUE_L1))
 fMRI_measures$DELAY_L1_avg <- rowMeans(cbind(fMRI_measures$R_DELAY_L1,fMRI_measures$L_DELAY_L1))
 fMRI_measures$PROBE_L1_avg <- rowMeans(cbind(fMRI_measures$R_PROBE_L1,fMRI_measures$L_PROBE_L1))
@@ -2242,12 +3018,12 @@ ERSP_measures_alpha <- Reduce(function(x,y) merge(x,y,by="PTID"),
 colnames(ERSP_measures_alpha) <- c("PTID","high_alpha_cue_midOccip", "low_alpha_cue_midOccip", "LE_alpha_cue_midOccip", "high_alpha_delay_midOccip", "low_alpha_delay_midOccip", "LE_alpha_delay_midOccip", "high_alpha_cue_Oz", "low_alpha_cue_Oz", "LE_alpha_cue_Oz", "high_alpha_delay_Oz", "low_alpha_delay_Oz", "LE_alpha_delay_Oz", "high_alpha_probe_midOccip", "low_alpha_probe_midOccip", "LE_alpha_probe_midOccip","high_alpha_probe_Oz", "low_alpha_probe_Oz", "LE_alpha_probe_Oz" )
 
 ERSP_measures_beta <- Reduce(function(x,y) merge(x,y,by="PTID"), 
-                              list(beta_cue_average_midOccip,
-                                   beta_delay_average_midOccip,
-                                   beta_cue_average_Oz, 
-                                   beta_delay_average_Oz, 
-                                   beta_probe_average_midOccip, 
-                                   beta_probe_average_Oz))
+                             list(beta_cue_average_midOccip,
+                                  beta_delay_average_midOccip,
+                                  beta_cue_average_Oz, 
+                                  beta_delay_average_Oz, 
+                                  beta_probe_average_midOccip, 
+                                  beta_probe_average_Oz))
 
 
 colnames(ERSP_measures_beta) <- c("PTID","high_beta_cue_midOccip", "low_beta_cue_midOccip", "LE_beta_cue_midOccip", "high_beta_delay_midOccip", "low_beta_delay_midOccip", "LE_beta_delay_midOccip", "high_beta_cue_Oz", "low_beta_cue_Oz", "LE_beta_cue_Oz", "high_beta_delay_Oz", "low_beta_delay_Oz", "LE_beta_delay_Oz", "high_beta_probe_midOccip", "low_beta_probe_midOccip", "LE_beta_probe_midOccip","high_beta_probe_Oz", "low_beta_probe_Oz", "LE_beta_probe_Oz" )
