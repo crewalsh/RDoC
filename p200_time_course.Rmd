@@ -45,6 +45,8 @@ rects <- data.frame(xstart=c(0,2.5,10),xend=c(2.5,10,12),col = factor(c("cue","d
 rects$xstart <- rects$xstart+5
 rects$xend <- rects$xend+5
 
+delay_rect <- data.frame(xstart = 9, xend = 12)
+
 ```
 
 ```{r load in time course data}
@@ -73,6 +75,7 @@ probe_ROI_list <- c("probe_R_OFC", "probe_R_insula", "probe_R_dlPFC", "probe_L_I
 probe_TCs <- load_in_ROI(basepath, probe_ROI_list)
 
 ```
+
 
 ```{r split TCs into groups}
 
@@ -249,16 +252,21 @@ for (ROI in seq.int(1,length(cue_TC_for_plot))){
 ```{r load effects - delay}
 
 for (ROI in seq.int(1,length(delay_TC_for_plot))){
-  print(ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
-          geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, fill=col,alpha =0.005),show.legend = FALSE)+
-          geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
-          ylab("Mean Activity") +
-          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
-          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
-          geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
-          ggtitle(paste("Load effects",names(delay_TCs)[ROI]))+
-          ylim(c(-.4,.5))  
-  )
+  ggplot(data=delay_TC_for_plot[[ROI]][["long"]])+
+    geom_rect(data=delay_rect,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf, alpha =0.005),fill="gray",show.legend = FALSE)+
+    geom_line(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load=="LE"),aes(x=Time,y=Mean,color=level),size=1) +
+    ylab("Mean Activity") +
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="high"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="red")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="med"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="green")+
+    geom_ribbon(data=delay_TC_for_plot[[ROI]][["long"]] %>% filter(load == "LE") %>% filter(level=="low"),aes(x=Time,ymin=SE_min, ymax=SE_max),alpha=.2,linetype=2,fill="blue")+
+    ggtitle(paste("Load effects",names(delay_TCs)[ROI]))+
+    ylim(c(-.25,.5))  +
+    scale_x_continuous(breaks = seq.int(-2,18))+
+    theme_classic() -> temp
+  
+  filename <- paste('~/Documents/UCLA/Conferences/BAMM/',names(delay_TCs)[ROI], '_LE_TC.jpg')
+  ggsave(filename, temp)
+  
 }
 
 ```
@@ -457,6 +465,61 @@ probe_LE <- ggplot(data=probe_LE_TC_corr_for_plot) +
 ggplotly(cue_LE)
 ggplotly(delay_LE)
 ggplotly(probe_LE)
+
+```
+
+```{r}
+
+fusiform_LE <- read.csv('data/fus_load_effect.csv', header=FALSE)
+DFR_LE <- read.csv('data/DFR_delay_LE.csv', header=FALSE)
+
+LE_avg <- data.frame(fus_enc = fusiform_LE$V6,
+                     DFR_enc = DFR_LE$V6, 
+                     fus_delay = fusiform_LE$V8, 
+                     DFR_delay = DFR_LE$V8, 
+                     span = constructs_fMRI$omnibus_span_no_DFR)
+
+cor.test(LE_avg$fus_enc, LE_avg$span)
+cor.test(LE_avg$DFR_enc, LE_avg$span)
+cor.test(LE_avg$fus_delay, LE_avg$span)
+cor.test(LE_avg$DFR_delay, LE_avg$span)
+
+ggplot(data = LE_avg, aes(x=span, y=DFR_enc))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  xlab("Omnibus Span")+
+  ylab("Encoding load effect in DFR delay mask")+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> enc_DFR 
+enc_DFR
+ggsave("~/Documents/UCLA/Conferences/BAMM/encoding_DFR_span_corr.jpg", enc_DFR)
+
+
+ggplot(data = LE_avg, aes(x=span, y=fus_enc))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  xlab("Omnibus Span")+
+  ylab("Encoding load effect in fusiform mask")+
+  theme(aspect.ratio=1,text= element_text(size=24)) -> enc_fus 
+enc_fus
+ggsave("~/Documents/UCLA/Conferences/BAMM/encoding_fus_span_corr.jpg", enc_fus)
+
+ggplot(data = LE_avg, aes(x=span, y=DFR_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  xlab("Omnibus Span (no DFR measures)")+
+  ylab("Delay load effect in DFR delay mask")+
+  theme(aspect.ratio=1)
+
+ggplot(data = LE_avg, aes(x=span, y=fus_delay))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  xlab("Omnibus Span (no DFR measures)")+
+  ylab("Delay load effect in fusiform mask")+
+  theme(aspect.ratio=1)
 
 ```
 

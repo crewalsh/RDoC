@@ -1,0 +1,24 @@
+---
+title: "Untitled"
+author: "Catherine Walsh"
+date: "10/29/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(psych)
+
+load("data/behav.RData")
+load("data/load_effects_DFR.RData")
+load("data/split_groups_info.RData")
+
+```
+
+
+

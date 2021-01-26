@@ -250,7 +250,7 @@ for (i in seq.int(1,4)){
 data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
 data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
 
-data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot <- data_to_plot[,c(1,7,8,14,15,41,42)]
 data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
 
 corr_to_behav_plots <- list()
@@ -592,7 +592,8 @@ encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]] <- g
   stat_smooth(method="lm")+
   ylab("Similarity")+
   ggtitle("Template encoding/delay vs Omnibus Span")+
-  theme_classic()
+  theme_classic()+
+  theme(text = element_text(size=24), aspect.ratio=1)
 
 encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]] <- ggplot(data = 
                                                                                      temp_plot_data,aes(x=BPRS_TOT.x,y=correct_encoding_delay))+
@@ -650,7 +651,6 @@ for (behav in seq.int(2,7)){
 }
 
 correlations[["correct_encoding_to_correct_delay"]] <- temp
-
 
 ```
 
@@ -871,6 +871,8 @@ correlations[["correct_encoding_to_correct_delay"]][c(2,3,5),] %>%
 ```{r correct encoding to correct delay - fusiform}
 
 encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]]
+ggsave("~/Documents/UCLA/Conferences/BAMM/encoding_delay_sim_fus.jpg", encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["omnibus"]]
+)
 encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["L3_Acc"]]
 encoding_to_delay_plots[["correct_encoding_to_correct_delay"]][["BPRS"]]
 
@@ -1809,7 +1811,7 @@ for (i in seq.int(1,4)){
 data_to_plot <- merge(constructs_fMRI,p200_data,by="PTID")
 data_to_plot <- merge(data_to_plot,p200_clinical_zscores,by="PTID")
 
-data_to_plot <- data_to_plot[,c(1,6,7,13,14,40,41)]
+data_to_plot <- data_to_plot[,c(1,7,8,14,15,41,42)]
 data_to_plot$ACC_LE <- data_to_plot$XDFR_MRI_ACC_L3 - data_to_plot$XDFR_MRI_ACC_L1
 
 corr_to_behav_plots <- list()
@@ -1889,10 +1891,10 @@ for (i in seq.int(14,17)){
   scatter_plots_cue[[names(similarity_temp)[i]]][["omnibus"]]  <- ggplot(data=temp_plot_data)+
     geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X6))+
     stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X6),method="lm")+
-    scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
     ggtitle(names(similarity_temp)[i])+
     ylab("Inter-trial similarity")+
-    theme_classic()
+    theme_classic()+
+    theme(text=element_text(size=24), aspect.ratio=1)
   
   scatter_plots_cue[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
     geom_point(aes(x=BPRS_TOT.x,y=X6))+
@@ -1916,7 +1918,8 @@ for (i in seq.int(14,17)){
     scale_x_continuous(breaks = c(1:14),labels=c(1:14))+
     ggtitle(names(similarity_temp)[i])+
     ylab("Inter-trial similarity")+
-    theme_classic()
+    theme_classic()+
+    theme(text=element_text(size=24), aspect.ratio=1)
   
   scatter_plots_probe[[names(similarity_temp)[i]]][["BPRS"]]  <- ggplot(data=temp_plot_data)+
     geom_point(aes(x=BPRS_TOT.x,y=X11))+
@@ -1971,6 +1974,8 @@ cor.test(similarity_temp[["high_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3
 cor.test(similarity_temp[["low_correct_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
 cor.test(similarity_temp[["low_incorrect_avg"]]$X5,data_to_plot$XDFR_MRI_ACC_L3)
 
+ggsave("~/Documents/UCLA/Conferences/BAMM/ITC_encoding_DFR_span.jpg", scatter_plots_cue[["encoding"]][["high_correct_avg"]])
+ggsave("~/Documents/UCLA/Conferences/BAMM/ITC_probe_DFR_span.jpg", scatter_plots_probe[["encoding"]][["high_correct_avg"]])
 
 ```
 

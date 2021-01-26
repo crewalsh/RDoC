@@ -1,0 +1,123 @@
+---
+title: "BAMM Scratch"
+author: "Catherine Walsh"
+date: "11/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+library(psych)
+
+load('data/behav.RData')
+load('data/split_groups_info.RData')
+load('data/load_effects_DFR.RData')
+
+se <- function(x) {
+  sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
+}
+
+```
+
+```{r}
+
+omnibus_span_no_DFR <- p200_cog_zscores[,c("ANALYSIS_DIGITSPANFWD_RAW","WMS_SYMS_TOTSCORE","XLCD_K_MAX","XSCAP_MAX_CAPAC","ANALYSIS_DIGITSPANBKW_RAW","ANALYSIS_DIGITSPANSEQ_RAW","SCORING_LETNUMSEQ_RAW","WMS_SA_TOTSCORE","XAOS_PART_SCORE")]
+
+pairs.panels(omnibus_span_no_DFR, density=FALSE)
+
+span <- data.frame(val = rowMeans(omnibus_span_no_DFR, na.rm=TRUE))
+
+ggplot(data = span, aes(x=val))+
+  geom_histogram(color="white", fill="#536895")+
+  theme_classic()+
+  xlab("Omnibus Span Score")+
+  ylab("Frequency")+
+  theme(text = element_text(size=24)) -> span_hist
+
+ggsave("~/Documents/UCLA/Conferences/BAMM/span_hist.jpg", span_hist)
+
+```
+
+```{r}
+
+temp_plot_data <- merge(data_to_plot,similarity_temp[["high_correct_avg"]],by="PTID")
+
+ggplot(data=temp_plot_data)+
+  geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X6))+
+  stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X6),method="lm")+
+  ylab("Inter-trial similarity")+
+  theme_classic()+
+  theme(text=element_text(size=24), aspect.ratio = 1) -> encoding_span_plot
+
+ggsave("~/Documents/UCLA/Conferences/BAMM/ITC_encoding_span.jpg", encoding_span_plot)
+
+
+ggplot(data=temp_plot_data)+
+  geom_point(aes(x=omnibus_span_no_DFR_MRI,y=X11))+
+  stat_smooth(aes(x=omnibus_span_no_DFR_MRI,y=X11),method="lm")+
+  ylab("Inter-trial similarity")+
+  theme_classic()+
+  theme(text=element_text(size=24), aspect.ratio = 1) ->probe_span_plot
+ggsave("~/Documents/UCLA/Conferences/BAMM/ITC_probe_span.jpg", probe_span_plot)
+
+
+```
+```{r}
+
+load("~/Documents/Code/RDoC_for_GitHub/data/load_effects_DFR.RData")
+
+plot_data <- cbind(p200_delay_DFR, constructs_fMRI)
+
+ggplot(data = plot_data, aes(x=omnibus_span_no_DFR, y = DFR_Load3_Load1))+
+  geom_point()+
+  stat_smooth(method="loess")+
+  theme_classic()+
+  theme(text = element_text(size=24)) -> inverted_u_scatter 
+
+ggsave("~/Documents/UCLA/Conferences/BAMM/inverted_u_scatter.jpg", inverted_u_scatter)
+
+plot_data <- merge(plot_data, WM_groups[["all"]])
+
+plot_data %>% 
+  group_by(level) %>% 
+  summarise(average = mean(DFR_Load3_Load1), se_act = se(DFR_Load3_Load1), se_min = average-se_act, se_max = average+se_act) %>%
+  mutate(level = factor(level, levels = c("low", "med", "high")))%>%
+  ggplot(aes(x=level, y = average))+
+  geom_bar(fill = "#536895", stat = "identity")+
+  geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.2)+
+  theme_classic()+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> inverted_u_bar
+ggsave("~/Documents/UCLA/Conferences/BAMM/inverted_u_bar.jpg", inverted_u_bar)
+
+DFR.aov <- aov(data = plot_data, DFR_Load3_Load1 ~ level)
+summary(DFR.aov)
+TukeyHSD(DFR.aov)
+```
+
+```{r}
+
+merge(p200_clinical_zscores, constructs_fMRI, by= "PTID") %>% 
+  ggplot(aes(x=omnibus_span_no_DFR, y = BPRS_TOT)) +
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> span_symptoms
+
+ggsave("~/Documents/UCLA/Conferences/BAMM/span_symptoms.jpg", span_symptoms)
+
+ggplot(data = constructs_fMRI, aes(x=omnibus_span_no_DFR, y = LTM))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  theme(aspect.ratio = 1, text=element_text(size=24)) -> LTM_span_plot
+ggsave("~/Documents/UCLA/Conferences/BAMM/LTM_span.jpg", LTM_span_plot)
+
+cor.test(constructs_fMRI$LTM, constructs_fMRI$omnibus_span_no_DFR)
+
+```
+

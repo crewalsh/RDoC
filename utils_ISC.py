@@ -14,13 +14,12 @@ from sklearn.preprocessing import StandardScaler
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
-base_path = '/u/project/rbilder/RDoC'
-#base_path = '/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/MVPA/'
+#base_path = '/u/project/rbilder/RDoC'
+base_path = '/Users/catherinewalsh/Documents/Code/RDoC_for_GitHub/data/MVPA/'
 TR = 1.5
-
 def load_yeo():
-    data_path = base_path + '/Catherine/walsh_scripts/'
-    #data_path = base_path
+    #data_path = base_path + '/Catherine/walsh_scripts/'
+    data_path = base_path
     mask_path = data_path + "Schaefer2018_400Parcels_7Networks_order_FSLMNI152_2mm.nii"
     labels_path = data_path + "Schaefer2018_400Parcels_7Networks_order.txt"
     atlas_yeo = nib.load(mask_path)

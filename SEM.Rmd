@@ -1,0 +1,618 @@
+---
+title: "SEM Final"
+author: "Catherine Walsh"
+date: "12/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries}
+
+library(tidyverse)
+library(lavaan)
+library(semPlot)
+library(readxl)
+library(MVN)
+library(nonnest2)
+library(knitr)
+
+```
+
+```{r}
+
+pIDs_pop200 <- read_excel("~/Documents/UCLA/Research/RDoC/pop200.xls", col_names = FALSE)
+behav <- read.csv("~/Documents/UCLA/Research/RDoC/RDoC_CATHERINE_QUERY5.csv")
+
+behav <- behav[behav$PTID %in% pIDs_pop200$...1,c(1,10, 12:13, 23:24,36:38, 41, 44,51, 53, 55, 57, 59:62)]
+
+all_behav <- read_excel("~/Documents/UCLA/Research/RDoC/RDoC_Merged_Behavior_pop200.xlsx")
+filling_in <- dplyr::select(all_behav,Xsub,XAOS_part_score,XLCD_K_MAX,XDPX_DPRIME,XDFR_MRI_acc_L1,XDFR_MRI_acc_L3,XNR_Lure_vs_Control_ErrorRate, XRISE_Pr_item,XRISE_Pr_relat,Xscap_max_capac,XSCWT_CONFLICT_RT_EFFECT)
+colnames(filling_in) <- colnames(behav)[1:11]
+behav[,1:11] <- filling_in
+
+# z score 
+
+behav_zscore <- data.frame(scale(behav))
+behav_zscore$PTID <- behav$PTID
+behav_zscore$load_effect <- behav_zscore$XDFR_MRI_ACC_L3 - behav_zscore$XDFR_MRI_ACC_L1
+
+```
+
+Our data is not multivariate normal. 
+
+```{r check data for normality}
+
+mvn(behav_zscore[,c(2:4,7:20)], mvnTest = "mardia", univariatePlot = "histogram")
+
+```
+
+
+```{r calculate covariance matrix}
+
+cov_matrix <- cov(behav_zscore[,2:20], use = "pairwise.complete.obs")
+#View(cor(behav_zscore[,2:20], use = "pairwise.complete.obs"))
+
+colnames(cov_matrix) <-c("AOS", "LCD", "DPX", "DFR L1", "DFR L3", "RN", "RISE - Item", "RISE - Relat",
+                         "SCAP", "Stroop", "LNS", "DS - Fwd", "DS - Back", "DS - Seq", "Mat Reas", 
+                         "Vocab", "SA","SS", "Load Effect")
+
+rownames(cov_matrix) <-c("AOS", "LCD", "DPX", "DFR L1", "DFR L3", "RN", "RISE - Item", "RISE - Relat",
+                         "SCAP", "Stroop", "LNS", "DS - Fwd", "DS - Back", "DS - Seq", "Mat Reas", 
+                         "Vocab", "SA","SS", "Load Effect")
+
+
+
+```
+
+First model does not fit great - if we look at residuals, clearly we need to add in some correlations, particularly between desk tests and neuropsych tests, which are of the same format. 
+
+```{r simple vs complex - predicting DFR score no corrs}
+
+model1 <- '
+  #measurement model 
+    intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  simple_span =~ XSCAP_MAX_CAPAC + XLCD_K_MAX+ WMS_SYMS_TOTSCORE + ANALYSIS_DIGITSPANFWD_RAW  
+  complex_span =~ SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE 
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+
+  load_effect ~ simple_span + complex_span + GM_IC + LTM + intelligence
+
+
+'
+simple_complex_labs <- c("Vocab", "MatRea","AOS","DPX", "RN", "SCAP","LCD","Sym\nSpan", "DS\nFwd", "LetNum\nSeq", 
+                         "DS\nBkd","DS\nSeq","SA",
+                         "RISE\nRelat", "RISE\nItem",  "Load\nEffect", "Intelligence","GM/IC", "Simple\nSpan",
+                         "Complex\nSpan","LTM")
+fit.model1 <- sem(model1, data = behav_zscore[,2:20], estimator = "WLS")
+semPaths(fit.model1,nodeLabels = simple_complex_labs, style="lisrel")
+
+
+summary(fit.model1,fit.measures=TRUE)
+standardizedSolution(fit.model1)
+
+residuals(fit.model1, type = "cor")
+
+
+```
+
+Adding in these correlations create a much better fit! 
+
+```{r simple vs complex - let things correlate}
+
+model2 <- '
+  #measurement model 
+  simple_span =~ XSCAP_MAX_CAPAC + XLCD_K_MAX+ WMS_SYMS_TOTSCORE + ANALYSIS_DIGITSPANFWD_RAW  
+  complex_span =~ SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE + XAOS_PART_SCORE
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  load_effect ~ simple_span + complex_span + GM_IC + LTM + intelligence
+
+
+'
+fit.model2 <- sem(model2, data = behav_zscore[,2:20], estimator = "WLS")
+simple_complex_labs <- c("SCAP","LCD","Sym\nSpan", "DS\nFwd", "LetNum\nSeq", "DS\nBkd","DS\nSeq","SA", "AOS", "DPX", "RN", 
+                         "RISE\nRelat", "RISE\nItem", "Vocab", "MatRea", "Load Effect", "Simple\nSpan", "Complex\nSpan", 
+                         "GM/IC","LTM", "Intelligence")
+semPaths(fit.model2)
+
+summary(fit.model2,fit.measures=TRUE)
+standardizedSolution(fit.model2)
+
+residuals(fit.model2, type = "cor")
+
+
+
+```
+
+Let's add in more correlations to reduce residuals. Looks like there's unexplained variance between LTM and all the simple span tasks, so let's add it in at that level.
+
+```{r simple vs complex 4}
+
+model4 <- '
+  #measurement model 
+    intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  simple_span =~ XSCAP_MAX_CAPAC + XLCD_K_MAX+ WMS_SYMS_TOTSCORE + ANALYSIS_DIGITSPANFWD_RAW  
+  complex_span =~ SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE 
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  LTM ~~ simple_span
+  LTM ~~ complex_span
+  
+  XNR_LURE_VS_CONTROL_ERRORRATE ~~ ANALYSIS_DIGITSPANFWD_RAW 
+  XAOS_PART_SCORE ~~ ANALYSIS_DIGITSPANFWD_RAW
+  ANALYSIS_DIGITSPANFWD_RAW  ~~ VOCABULARY_TOTALRAWSCORE
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX
+  XSCAP_MAX_CAPAC ~~ XDPX_DPRIME
+  XSCAP_MAX_CAPAC ~~ MATRIXREASONING_TOTALRAWSCORE
+  XNR_LURE_VS_CONTROL_ERRORRATE ~~ XRISE_PR_ITEM
+  VOCABULARY_TOTALRAWSCORE ~~ SCORING_LETNUMSEQ_RAW
+  
+  load_effect ~ simple_span + complex_span + GM_IC + LTM + intelligence
+
+
+'
+fit.model4 <- sem(model4, data = behav_zscore[,2:20], estimator = "WLS")
+# simple_complex_labs <- c("Vocab", "MatRea","DPX", "RN", "SCAP","LCD","Sym\nSpan", "DS\nFwd","AOS", "LetNum\nSeq", 
+#                          "DS\nBkd","DS\nSeq","SA",
+#                          "RISE\nRelat", "RISE\nItem",  "Load\nEffect", "Intelligence","GM/IC", "Simple\nSpan",
+#                          "Complex\nSpan","LTM")
+semPaths(fit.model4,style="lisrel")
+semPaths(fit.model4,style="lisrel", nodeLabels = simple_complex_labs, whatLabels = "std")
+summary(fit.model4,fit.measures=TRUE)
+standardizedSolution(fit.model4) 
+
+model_fit <- standardizedSolution(fit.model4) 
+write.csv(model_fit,"~/Box/UCLA/Class/M257/final/stats.csv")
+
+residuals(fit.model4, type = "cor")
+
+```
+
+```{r}
+
+anova(fit.model1, fit.model4)
+
+```
+
+
+```{r omnibus span no corrs - predicting DFR score}
+
+model6 <- '
+  #measurement model 
+  omnibus_span =~ ANALYSIS_DIGITSPANFWD_RAW + WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX+SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  load_effect ~ omnibus_span + GM_IC + LTM + intelligence
+
+'
+fit.model6 <- sem(model6, data = behav_zscore[,2:20], estimator = "WLS")
+sem_labs_omni <- c("DS\nFwd","Sym\nSpan", "SCAP", "LCD","LetNum\nSeq", "DS\nBkd", "DS\nSeq", "SA", "AOS", "DPX",   
+              "RN", "RISE\nRelat", "RISE\nItem", "Vocab","MatRea", "Load\nEffect", "Omnibus\nSpan", "GM/IC","LTM", "Intelligence")
+semPaths(fit.model6, style="lisrel", nodeLabels = sem_labs_omni)
+
+
+summary(fit.model6,fit.measures=TRUE)
+standardizedSolution(fit.model6)
+residuals(fit.model6, type = "cor")
+
+
+```
+
+```{r omnibus span with corrs - predicting DFR score}
+
+model5 <- '
+  #measurement model 
+  omnibus_span =~ ANALYSIS_DIGITSPANFWD_RAW + WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX+SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE 
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+
+  LTM ~~ omnibus_span
+  
+  XNR_LURE_VS_CONTROL_ERRORRATE ~~ ANALYSIS_DIGITSPANFWD_RAW 
+  XAOS_PART_SCORE ~~ ANALYSIS_DIGITSPANFWD_RAW
+  ANALYSIS_DIGITSPANFWD_RAW  ~~ VOCABULARY_TOTALRAWSCORE
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX
+  XSCAP_MAX_CAPAC ~~ XDPX_DPRIME
+  XSCAP_MAX_CAPAC ~~ MATRIXREASONING_TOTALRAWSCORE
+  XNR_LURE_VS_CONTROL_ERRORRATE ~~ XRISE_PR_ITEM
+  VOCABULARY_TOTALRAWSCORE ~~ SCORING_LETNUMSEQ_RAW
+
+  load_effect ~ omnibus_span + GM_IC + LTM + intelligence
+
+'
+fit.model5 <- sem(model5, data = behav_zscore[,2:20], estimator = "WLS")
+sem_labs_omni <- c("DS\nFwd","Sym\nSpan", "SCAP", "LCD","LetNum\nSeq", "DS\nBkd", "DS\nSeq", "SA", "AOS", "DPX",   
+              "RN", "RISE\nRelat", "RISE\nItem", "Vocab","MatRea", "Load\nEffect", "Omnibus\nSpan", "GM/IC","LTM", "Intelligence")
+
+semPaths(fit.model5, style= "lisrel", nodeLabels = sem_labs_omni)
+
+summary(fit.model5,fit.measures=TRUE)
+standardizedSolution(fit.model5)
+residuals(fit.model5, type = "cor")
+
+
+```
+
+```{r}
+
+# model 6 has no correlations, model5 does
+anova(fit.model6, fit.model5)
+
+#model 5 = omnibus, model4 = simple/complex
+anova(fit.model5, fit.model4)
+
+```
+
+
+
+
+Other option - visual vs verbal separately, with a common WM latent variable. We know that adding in the correlations improves fit, so let's keep those in there. Not significant, but we are getting decent fit indices and RMSEA. 
+
+```{r visual vs verbal no corrs}
+
+model_visual_verbal1 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+    LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+
+  load_effect ~ visual+verbal + LTM + intelligence
+  
+
+'
+fit.model_visual_verbal1 <- sem(model_visual_verbal1, data = behav_zscore[,2:20], estimator = "WLS")
+summary(fit.model_visual_verbal1,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal1)
+
+sem_labs_vis <- c("Sym\nSpan", "SCAP", "LCD", "SA", "DPX", "DS\nFwd", "LetNum\nSeq", "DS\nBkd", "DS\nSeq",
+                  "AOS", "RN", "Vocab", "MatRea","RISE\nItem", "RISE\nRelat", "Load\nEffect", "Visual", "Verbal",  "Intelligence","LTM")
+semPaths(fit.model_visual_verbal1,style="lisrel", nodeLabels = sem_labs_vis)
+semPaths(fit.model_visual_verbal1, style="lisrel")
+
+residuals(fit.model_visual_verbal1, type = "cor")
+
+
+```
+
+
+```{r visual vs verbal}
+
+model_visual_verbal1 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  load_effect ~ visual+verbal + LTM + intelligence
+  
+
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+'
+fit.model_visual_verbal1 <- sem(model_visual_verbal1, data = behav_zscore[,2:20], estimator = "MLM")
+summary(fit.model_visual_verbal1,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal1)
+
+semPaths(fit.model_visual_verbal1)
+residuals(fit.model_visual_verbal1, type = "cor")
+
+
+```
+
+If we look at residuals, seems like there might be some relationship that we're not accounting for between the verbal WM measures and vocabulary (which is also a verbal task) and visual and matrix reasoning - so let's allow that to correlate. This improves the residuals there.
+
+
+```{r visual vs verbal 2}
+
+model_visual_verbal2 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  WM =~ visual+verbal
+  load_effect ~ WM + LTM + intelligence
+  
+  verbal ~~ VOCABULARY_TOTALRAWSCORE
+  visual ~~ MATRIXREASONING_TOTALRAWSCORE
+
+
+  LTM ~~ visual
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+
+'
+fit.model_visual_verbal2 <- sem(model_visual_verbal2, data = behav_zscore[,2:20], estimator = "MLM")
+summary(fit.model_visual_verbal2,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal2)
+
+semPaths(fit.model_visual_verbal2)
+residuals(fit.model_visual_verbal2, type = "cor")
+
+
+```
+
+If we take a look at the residuals again, we see that there seem to be some unaccounted for residuals in the desk tesks - let's let them correlate as well. 
+
+
+```{r visual vs verbal3}
+
+model_visual_verbal3 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  WM =~ visual+verbal
+  load_effect ~ WM + LTM + intelligence
+  
+  verbal ~~ VOCABULARY_TOTALRAWSCORE
+  visual ~~ MATRIXREASONING_TOTALRAWSCORE
+
+
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  XDPX_DPRIME ~~ XSCAP_MAX_CAPAC
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX 
+
+'
+fit.model_visual_verbal3 <- sem(model_visual_verbal3, data = behav_zscore[,2:20], estimator = "MLM")
+summary(fit.model_visual_verbal3,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal3)
+
+semPaths(fit.model_visual_verbal3)
+residuals(fit.model_visual_verbal3, type = "cor")
+
+
+```
+
+There seems to be a relatively large residual between LCD K max and digits forward, which theoretically measure the same thing, so let's let them correlate
+
+```{r visual vs verbal4}
+
+model_visual_verbal4 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+
+  WM =~ visual+verbal
+  load_effect ~ WM + LTM + intelligence
+  
+  verbal ~~ VOCABULARY_TOTALRAWSCORE
+  visual ~~ MATRIXREASONING_TOTALRAWSCORE
+
+
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  XDPX_DPRIME ~~ XSCAP_MAX_CAPAC
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX 
+  XLCD_K_MAX ~~ ANALYSIS_DIGITSPANFWD_RAW
+
+
+'
+fit.model_visual_verbal4 <- sem(model_visual_verbal4, data = behav_zscore[,2:20], estimator = "MLM")
+summary(fit.model_visual_verbal4,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal4)
+
+semPaths(fit.model_visual_verbal4)
+residuals(fit.model_visual_verbal4, type = "cor")
+
+
+```
+
+Also noticing a large residual for symbol span and DPX - let's add that in. 
+
+```{r visual vs verbal5}
+
+model_visual_verbal5 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+  
+  WM =~ visual+verbal
+  
+  ## regression
+  load_effect ~ WM + LTM + intelligence
+  
+  verbal ~~ VOCABULARY_TOTALRAWSCORE
+  visual ~~ MATRIXREASONING_TOTALRAWSCORE
+
+  # allow tasks to correlate 
+  
+  ## neuropsych tasks
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  ## desk tasks 
+  XDPX_DPRIME ~~ XSCAP_MAX_CAPAC  
+  XDPX_DPRIME ~~ WMS_SYMS_TOTSCORE
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX 
+  
+  ## capacity measures 
+  XLCD_K_MAX ~~ ANALYSIS_DIGITSPANFWD_RAW
+
+
+'
+fit.model_visual_verbal5 <- sem(model_visual_verbal5, data = behav_zscore[,2:20], estimator = "MLM")
+summary(fit.model_visual_verbal5,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal5)
+
+semPaths(fit.model_visual_verbal5)
+residuals(fit.model_visual_verbal5, type = "cor")
+
+
+```
+
+Finally, seeing some large residuals with intelligence and WM measures - let's add in that correlation. 
+
+```{r visual vs verbal9}
+
+model_visual_verbal9 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+    LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+
+
+  intelligence ~~ visual 
+  intelligence ~~ verbal
+  
+  verbal ~~ VOCABULARY_TOTALRAWSCORE
+  visual ~~ MATRIXREASONING_TOTALRAWSCORE
+
+  # regression
+  load_effect ~ visual + verbal + LTM + intelligence
+
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  XDPX_DPRIME ~~ XSCAP_MAX_CAPAC  
+  XDPX_DPRIME ~~ WMS_SYMS_TOTSCORE
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX 
+  XLCD_K_MAX ~~ ANALYSIS_DIGITSPANFWD_RAW
+
+'
+fit.model_visual_verbal9 <- sem(model_visual_verbal9, data = behav_zscore[,2:20], estimator = "WLS")
+summary(fit.model_visual_verbal9,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal9)
+
+
+sem_labs_vis <- c("Sym\nSpan", "SCAP", "LCD", "SA", "DPX","MatRea", "DS\nFwd", "LetNum\nSeq", "DS\nBkd", "DS\nSeq",
+                  "AOS", "RN", "Vocab", "RISE\nItem", "RISE\nRelat", "Load\nEffect", "Visual", "Verbal",  "Intelligence","LTM")
+semPaths(fit.model_visual_verbal9, style="lisrel", nodeLabels = sem_labs_vis)
+semPaths(fit.model_visual_verbal9, style="lisrel")
+
+residuals(fit.model_visual_verbal9, type = "cor")
+
+
+```
+
+```{r}
+#model 9 includes correlations, model 1 does not
+anova(fit.model_visual_verbal9, fit.model_visual_verbal1)
+
+#model 4 is simple/complex
+anova(fit.model4, fit.model_visual_verbal9)
+
+```
+
+```{r visual vs verbal10}
+
+model_visual_verbal10 <- '
+  #measurement model 
+  visual =~ WMS_SYMS_TOTSCORE + XSCAP_MAX_CAPAC + XLCD_K_MAX + WMS_SA_TOTSCORE + XDPX_DPRIME
+  verbal =~ ANALYSIS_DIGITSPANFWD_RAW + SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + XAOS_PART_SCORE + XNR_LURE_VS_CONTROL_ERRORRATE 
+  intelligence =~ VOCABULARY_TOTALRAWSCORE + MATRIXREASONING_TOTALRAWSCORE
+    LTM =~ XRISE_PR_RELAT + XRISE_PR_ITEM
+
+  GM_IC =~ XAOS_PART_SCORE + XDPX_DPRIME + XNR_LURE_VS_CONTROL_ERRORRATE
+  simple_span =~ XSCAP_MAX_CAPAC + XLCD_K_MAX+ WMS_SYMS_TOTSCORE + ANALYSIS_DIGITSPANFWD_RAW  
+  complex_span =~ SCORING_LETNUMSEQ_RAW + ANALYSIS_DIGITSPANBKW_RAW + ANALYSIS_DIGITSPANSEQ_RAW + WMS_SA_TOTSCORE 
+
+  
+ 
+
+  # regression
+  load_effect ~ simple_span + complex_span + LTM + intelligence
+
+  # allow tasks to correlate 
+  ANALYSIS_DIGITSPANFWD_RAW ~~ SCORING_LETNUMSEQ_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  ANALYSIS_DIGITSPANFWD_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANBKW_RAW
+  SCORING_LETNUMSEQ_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  ANALYSIS_DIGITSPANBKW_RAW ~~ ANALYSIS_DIGITSPANSEQ_RAW
+  
+  XDPX_DPRIME ~~ XSCAP_MAX_CAPAC  
+  XDPX_DPRIME ~~ WMS_SYMS_TOTSCORE
+  XSCAP_MAX_CAPAC ~~ XLCD_K_MAX 
+  #XLCD_K_MAX ~~ ANALYSIS_DIGITSPANFWD_RAW
+
+'
+fit.model_visual_verbal10 <- sem(model_visual_verbal10, data = behav_zscore[,2:20], estimator = "WLS")
+summary(fit.model_visual_verbal10,fit.measures=TRUE)
+standardizedSolution(fit.model_visual_verbal10)
+
+
+#sem_labs_vis <- c("Sym\nSpan", "SCAP", "LCD", "SA", "DPX","MatRea", "DS\nFwd", "LetNum\nSeq", "DS\nBkd", "DS\nSeq",
+                  #"AOS", "RN", "Vocab", "RISE\nItem", "RISE\nRelat", "Load\nEffect", "Visual", "Verbal",  "Intelligence","LTM")
+#semPaths(fit.model_visual_verbal9, style="lisrel", nodeLabels = sem_labs_vis)
+semPaths(fit.model_visual_verbal10, style="lisrel")
+
+# residuals(fit.model_visual_verbal10, type = "cor")
+
+
+```

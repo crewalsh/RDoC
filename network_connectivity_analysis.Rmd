@@ -466,6 +466,7 @@ ggplot(data= brain_behav_plot_data,aes(x=FPCN_B_activity,y=BPRS))+
 
 
 ```
+
 ```{r similarity to behav} 
 
 plot_data <- cbind(brain_behav_plot_data, mat_data$rand_index_DFR[,81])

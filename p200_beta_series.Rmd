@@ -1,0 +1,1112 @@
+---
+title: "Beta Series Connectivity"
+author: "Catherine Walsh"
+date: "11/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries and data}
+
+library(tidyverse)
+library(psych)
+library(rmatio)
+library(patchwork)
+library(reshape2)
+library(vegan)
+library(beepr)
+
+load('data/behav.RData')
+load('data/split_groups_info.RData')
+
+source("helper_fxns/calc_network_avg.R")
+source("helper_fxns/mutate_for_heatmap.R")
+
+se <- function(x) {
+  sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
+}
+
+```
+
+```{r load beta series}
+
+avg_beta_series <- list(cue_load1 = read.mat("data/BetaSeries/RcorrCue_load1_Acc1.mat")$R, 
+                        cue_load3 = read.mat("data/BetaSeries/RcorrCue_load3_Acc1.mat")$R,
+                        delay_load1 = read.mat("data/BetaSeries/RcorrDelay_load1_Acc1.mat")$R, 
+                        delay_load3 = read.mat("data/BetaSeries/RcorrDelay_load3_Acc1.mat")$R, 
+                        probe_load1 = read.mat("data/BetaSeries/RcorrProbe_load1_Acc1.mat")$R, 
+                        probe_load3 = read.mat("data/BetaSeries/RcorrProbe_load3_Acc1.mat")$R)
+
+rois <- read.mat("data/BetaSeries/roi_order.mat")$roi
+beta_series_sujs <- unlist(read.mat("data/BetaSeries/suj_order.mat"))
+beta_series_cond_order <- read.mat("data/BetaSeries/condition_order.mat")
+
+suj_by_cond <- read.mat("data/BetaSeries/Suj_by_Cond.mat")$Suj_by_Cond
+
+
+```
+
+```{r calculate arctanh}
+
+for (cond in seq.int(1,6)){ 
+  avg_beta_series[[cond]] <- atanh(avg_beta_series[[cond]])
+}
+
+for (suj in seq.int(1,168)){
+  for (cond in seq.int(7,12)){
+    suj_by_cond[[suj]][[cond]] <- atanh(suj_by_cond[[suj]][[cond]]) 
+    
+  }
+}
+
+```
+
+
+```{r calculate network avgs}
+
+avg_data <- data.frame(matrix(nrow=6, ncol=19))
+colnames(avg_data) <- c("PTID","FPCN_FPCN", "DMN_DMN", "HPC_HPC", "FFA_FFA", "FPCN_DMN", "FPCN_HPC", "FPCN_FFA", "DMN_HPC",
+                        "DMN_FFA", "HPC_FFA", "FPCN_PFC_FPCN_PFC", "FPCN_PFC_FPCN_Par", "FPCN_PFC_DMN", "FPCN_PFC_HPC", 
+                        "FPCN_PFC_FFA", "FPCN_Par_DMN", "FPCN_Par_HPC", "FPCN_Par_FFA")
+
+for (cond in seq.int(1,6)){ 
+  avg_data[cond,] <- calc_network_avg(names(avg_beta_series)[cond],avg_beta_series[[cond]] )
+}
+
+suj_avg_data <- data.frame(matrix(nrow=169, ncol=19))
+colnames(suj_avg_data) <- c("PTID","FPCN_FPCN", "DMN_DMN", "HPC_HPC", "FFA_FFA", "FPCN_DMN", "FPCN_HPC", "FPCN_FFA", "DMN_HPC",
+                            "DMN_FFA", "HPC_FFA", "FPCN_PFC_FPCN_PFC", "FPCN_PFC_FPCN_Par", "FPCN_PFC_DMN", "FPCN_PFC_HPC", 
+                            "FPCN_PFC_FFA", "FPCN_Par_DMN", "FPCN_Par_HPC", "FPCN_Par_FFA")
+
+suj_avg_list <- list(
+  cue_load3 = suj_avg_data, 
+  delay_load3 = suj_avg_data,
+  probe_load3 = suj_avg_data,
+  cue_load1 = suj_avg_data, 
+  delay_load1 = suj_avg_data,
+  probe_load1 = suj_avg_data,
+  cue_load_effect = suj_avg_data, 
+  delay_load_effect = suj_avg_data, 
+  probe_load_effect = suj_avg_data
+)
+
+for (cond in seq.int(7,12)){
+  for (suj in seq.int(1,169)){
+    
+    if (suj != 55){
+      
+      suj_avg_list[[cond-6]][suj,] <- calc_network_avg(beta_series_sujs[suj], suj_by_cond[[suj]][[cond]])
+    }else{ 
+      suj_avg_list[[cond-6]]$PTID[suj] <- beta_series_sujs[suj]
+    }
+    
+  }
+  
+  suj_avg_list[[cond-6]]$PTID <- c(suj_avg_list[[cond-6]]$PTID[1:54], 1554, suj_avg_list[[cond-6]]$PTID[55:168])
+}
+
+for (LE in seq.int(7,9)){
+  suj_avg_list[[LE]]$PTID <- suj_avg_list[[1]]$PTID
+}
+
+
+
+```
+
+```{r calculate load effects}
+
+suj_avg_list[["cue_load_effect"]][,2:19] <- suj_avg_list[["cue_load3"]][,2:19] - suj_avg_list[["cue_load1"]][,2:19]
+suj_avg_list[["delay_load_effect"]][,2:19] <- suj_avg_list[["delay_load3"]][,2:19] - suj_avg_list[["delay_load1"]][,2:19]
+suj_avg_list[["probe_load_effect"]][,2:19] <- suj_avg_list[["probe_load3"]][,2:19] - suj_avg_list[["probe_load1"]][,2:19]
+
+avg_data[7,2:19] <- avg_data[2,2:19]- avg_data[1,2:19]
+avg_data$PTID[7] <- "cue_load_effect"
+avg_data[8,2:19] <- avg_data[4,2:19]- avg_data[3,2:19]
+avg_data$PTID[8] <- "delay_load_effect" 
+avg_data[9,2:19] <- avg_data[6,2:19]- avg_data[5,2:19]
+avg_data$PTID[9] <- "probe_load_effect"
+
+```
+
+```{r check change in span group when EEG removed}
+
+check_span_groups <- constructs_fMRI 
+
+check_span_groups<- check_span_groups[order(check_span_groups$omnibus_span_no_DFR_MRI),]
+check_span_groups$without_MRI <- "low"
+check_span_groups$without_MRI[57] <- "not_incl"
+check_span_groups$without_MRI[58:113] <- "med"
+check_span_groups$without_MRI[114] <- "not_incl"
+check_span_groups$without_MRI[115:170] <- "high"
+
+check_span_groups<- check_span_groups[order(check_span_groups$omnibus_span_no_DFR),]
+check_span_groups$without_EEG <- "low"
+check_span_groups$without_EEG[57] <- "not_incl"
+check_span_groups$without_EEG[58:113] <- "med"
+check_span_groups$without_EEG[114] <- "not_incl"
+check_span_groups$without_EEG[115:170] <- "high"
+
+sum(check_span_groups$without_MRI != check_span_groups$without_EEG, na.rm=TRUE)
+check_span_groups <- merge(check_span_groups, p200_demographics)
+colnames(check_span_groups)[10] <- "level"
+
+WM_groups_no_EEG <- list(high = check_span_groups %>% filter(level == "high"),
+                         med = check_span_groups %>% filter(level == "med"), 
+                         low = check_span_groups %>% filter(level == "low"))
+
+WM_groups_no_EEG[["all"]] <- rbind(WM_groups_no_EEG[["low"]],WM_groups_no_EEG[["med"]],WM_groups_no_EEG[["high"]] )
+
+```
+
+```{r add span info}
+
+WM_merge <- merge(WM_groups_no_EEG[["all"]], constructs_fMRI)
+
+for (cond in seq.int(1,9)){
+  suj_avg_list[[cond]] <- merge(suj_avg_list[[cond]], WM_merge, by = "PTID")
+}
+
+```
+
+```{r remove outliers}
+
+for (cond in seq.int(4,9)){
+  for (col in seq.int(2,19)){
+    m <- mean(suj_avg_list[[cond]][,col], na.rm=TRUE)
+    s <- sd(suj_avg_list[[cond]][,col], na.rm=TRUE)
+    max <- m + 3*s 
+    min <- m - 3*s 
+    suj_avg_list[[cond]][[is.na(suj_avg_list[[cond]][,col]),col]] <- 999
+    suj_avg_list[[cond]][(suj_avg_list[[cond]][,col] < min | suj_avg_list[[cond]][,col] > max), col] <- NA
+  }
+}
+
+
+
+```
+
+
+```{r plot averages -- high load}
+
+avg_data %>% 
+  select(PTID, FPCN_FPCN, DMN_DMN, HPC_HPC, FFA_FFA) %>%
+  melt() %>% 
+  filter(grepl("load3", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("Within Network Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+avg_data %>% 
+  select(PTID, FPCN_DMN, FPCN_HPC, FPCN_FFA) %>%
+  melt() %>% 
+  filter(grepl("load3", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FPCN Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+avg_data %>% 
+  select(PTID, FPCN_DMN, DMN_HPC, DMN_FFA) %>%
+  melt() %>% 
+  filter(grepl("load3", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("DMN Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+avg_data %>% 
+  select(PTID, FPCN_HPC, DMN_HPC, HPC_FFA) %>%
+  melt() %>% 
+  filter(grepl("load3", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("HPC Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+avg_data %>% 
+  select(PTID, FPCN_FFA, DMN_FFA, HPC_FFA) %>%
+  melt() %>% 
+  filter(grepl("load3", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FFA Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+```
+
+
+
+```{r plot high load by group}
+
+plot_list_L3 <- list()
+
+for (cond in seq.int(7,9)){
+  
+  cond_list <- list()
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_FPCN", "DMN_DMN", "HPC_HPC", "FFA_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["within"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_DMN", "FPCN_HPC", "FPCN_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FPCN"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_DMN", "DMN_HPC","DMN_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["DMN"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_HPC", "DMN_HPC","HPC_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["HPC"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_FFA", "DMN_FFA","HPC_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FFA"]]
+  plot_list_L3[[names(suj_avg_list)[cond]]] <- cond_list
+}
+
+plot_list_L3[["cue_load_effect"]][["within"]] + plot_list_L3[["delay_load_effect"]][["within"]] + plot_list_L3[["probe_load_effect"]][["within"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Within Network Connectivity")
+
+plot_list_L3[["cue_load_effect"]][["FPCN"]] + plot_list_L3[["delay_load_effect"]][["FPCN"]] + plot_list_L3[["probe_load_effect"]][["FPCN"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FPCN Connectivity")
+
+plot_list_L3[["cue_load_effect"]][["DMN"]] + plot_list_L3[["delay_load_effect"]][["DMN"]] + 
+  plot_list_L3[["probe_load_effect"]][["DMN"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "DMN Connectivity")
+
+plot_list_L3[["cue_load_effect"]][["HPC"]] + plot_list_L3[["delay_load_effect"]][["HPC"]] + 
+  plot_list_L3[["probe_load_effect"]][["HPC"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "HPC Connectivity")
+
+plot_list_L3[["cue_load_effect"]][["FFA"]] + plot_list_L3[["delay_load_effect"]][["FFA"]] + 
+  plot_list_L3[["probe_load_effect"]][["FFA"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FFA Connectivity")
+
+```
+
+```{r}
+
+suj_avg_list[[1]] %>% 
+  melt() %>%
+  filter(variable %in% c("HPC_HPC")) %>%
+  group_by(level, variable) %>% 
+  summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+  mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+  ggplot(aes(x=level, y = average)) + 
+  geom_bar(stat="identity", position = "dodge", fill="#536895")+
+  geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+  xlab("Regions")+
+  ylab("Average Connectivity")+
+  theme_classic()+
+  ggtitle("Cue Load 3")+
+  theme(aspect.ratio=1, text= element_text(size = 24)) -> HPC_cue_load3
+
+HPC_cue_load3
+
+#ggsave("~/Documents/UCLA/Conferences/BAMM/HPC_conn_cue_load3.jpg", HPC_cue_load3)
+
+suj_avg_list[[4]] %>% 
+  melt() %>%
+  filter(variable %in% c("HPC_HPC")) %>%
+  group_by(level, variable) %>% 
+  summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+  mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+  ggplot(aes(x=level, y = average)) + 
+  geom_bar(stat="identity", position = "dodge", fill="#536895")+
+  geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+  xlab("Regions")+
+  ylab("Average Connectivity")+
+  ggtitle("Cue Load 1")+
+  theme_classic()+
+  theme(aspect.ratio=1, text= element_text(size = 24)) -> HPC_cue_load1
+ggsave("~/Documents/UCLA/Conferences/BAMM/HPC_conn_cue_load1.jpg", HPC_cue_load1)
+
+HPC_cue_load3.aov <- aov(HPC_HPC ~ level, data = suj_avg_list[[1]])
+summary(HPC_cue_load3.aov)
+
+
+HPC_cue_load1.aov <- aov(HPC_HPC ~ level, data = suj_avg_list[[4]])
+summary(HPC_cue_load1.aov)
+TukeyHSD(HPC_cue_load1.aov)
+
+
+```
+
+
+```{r anovas for high load}
+
+for (cond in seq.int(1,3)){
+  print(names(suj_avg_list)[cond])
+  anova_results <- purrr::map(suj_avg_list[[cond]][,2:11], ~aov(.x ~ suj_avg_list[[cond]]$level ))
+  for (measure in seq.int(1,10)){
+    print(colnames(suj_avg_list[[cond]])[measure+1])
+    print(summary(anova_results[[measure]]))
+  }
+}
+
+```
+
+```{r plot averages -- load effect}
+
+avg_data %>% 
+  select(PTID, FPCN_FPCN, DMN_DMN, HPC_HPC, FFA_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("Within Network Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+avg_data %>% 
+  select(PTID, FPCN_DMN, FPCN_HPC, FPCN_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FPCN Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+avg_data %>% 
+  select(PTID, FPCN_DMN, DMN_HPC, DMN_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("DMN Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+avg_data %>% 
+  select(PTID, FPCN_HPC, DMN_HPC, HPC_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("HPC Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+avg_data %>% 
+  select(PTID, FPCN_FFA, DMN_FFA, HPC_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FFA Connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+```
+
+```{r}
+
+suj_avg_list[["cue_load_effect"]] %>% 
+  melt() %>%
+  filter(variable == "HPC_HPC") %>%
+  group_by(level, variable) %>% 
+  summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+  mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+  ggplot(aes(x=level, y = average)) + 
+  geom_bar(stat="identity", position = "dodge", fill = "#536895")+
+  geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+  xlab("Working Memory Capacity Group")+
+  ylab("Average Connectivity Load Effect")+
+  theme_classic()+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> cue_HPC_HPC
+
+#ggsave("~/Documents/UCLA/Conferences/BAMM/cue_HPC_HPC_conn.jpg", cue_HPC_HPC)
+
+suj_avg_list[["probe_load_effect"]] %>% 
+  melt() %>%
+  filter(variable == "FPCN_Par_FFA") %>%
+  group_by(level, variable) %>% 
+  summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+  mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+  ggplot(aes(x=level, y = average)) + 
+  geom_bar(stat="identity", position = "dodge", fill = "#536895")+
+  geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+  xlab("Working Memory Capacity Group")+
+  ylab("Average Connectivity Load Effect")+
+  theme_classic()+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> probe_FPCN_Par_FFA
+
+#ggsave("~/Documents/UCLA/Conferences/BAMM/probe_FPCN_Par_FFA_conn.jpg", probe_FPCN_Par_FFA)
+
+suj_avg_list[["probe_load_effect"]] %>% 
+  ggplot(aes(x=omnibus_span_no_DFR, y=FPCN_FFA))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  theme(aspect.ratio=1, text = element_text(size=24)) -> FPCN_FFA_scatter
+#ggsave("~/Documents/UCLA/Conferences/BAMM/FPCN_FFA_probe_scatter.jpg", FPCN_FFA_scatter)
+
+```
+
+
+```{r plot load effects by group}
+
+plot_list_load_effect <- list() 
+
+for (cond in seq.int(7,9)){
+  
+  cond_list <- list()
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_FPCN", "DMN_DMN", "HPC_HPC", "FFA_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["within"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_DMN", "FPCN_HPC", "FPCN_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FPCN"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_DMN", "DMN_HPC","DMN_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["DMN"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_HPC", "DMN_HPC","HPC_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["HPC"]]
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_FFA", "DMN_FFA","HPC_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FFA"]]
+  plot_list_load_effect[[names(suj_avg_list)[cond]]] <- cond_list
+}
+
+plot_list_load_effect[["cue_load_effect"]][["within"]] + plot_list_load_effect[["delay_load_effect"]][["within"]] + plot_list_load_effect[["probe_load_effect"]][["within"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "Within Network Connectivity")
+
+plot_list_load_effect[["cue_load_effect"]][["FPCN"]] + plot_list_load_effect[["delay_load_effect"]][["FPCN"]] + plot_list_load_effect[["probe_load_effect"]][["FPCN"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FPCN Connectivity")
+
+plot_list_load_effect[["cue_load_effect"]][["DMN"]] + plot_list_load_effect[["delay_load_effect"]][["DMN"]] + 
+  plot_list_load_effect[["probe_load_effect"]][["DMN"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "DMN Connectivity")
+
+plot_list_load_effect[["cue_load_effect"]][["HPC"]] + plot_list_load_effect[["delay_load_effect"]][["HPC"]] + 
+  plot_list_load_effect[["probe_load_effect"]][["HPC"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "HPC Connectivity")
+
+plot_list_load_effect[["cue_load_effect"]][["FFA"]] + plot_list_load_effect[["delay_load_effect"]][["FFA"]] + 
+  plot_list_load_effect[["probe_load_effect"]][["FFA"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FFA Connectivity")
+
+```
+FPCN/FFA in probe 
+
+```{r look for significant correlations }
+
+for (cond in seq.int(7,9)){
+  print(names(suj_avg_list)[cond])
+  
+  for (measure in seq.int(2, 11)){
+    print(colnames(suj_avg_list[[cond]])[measure])
+    print(cor.test(suj_avg_list[[cond]][,measure], suj_avg_list[[cond]]$omnibus_span_no_DFR))
+    
+  }
+}
+
+cor.test(suj_avg_list[[9]]$FPCN_FFA, suj_avg_list[[cond]]$omnibus_span_no_DFR)
+ggplot(data = suj_avg_list[[9]], aes(x=omnibus_span_no_DFR, y = FPCN_FFA))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()+
+  theme(aspect.ratio=1)
+
+```
+
+HPC-HPC in cue 
+
+DMN_FFA, HPC_FFA in delay, DMN_FFA in probe
+
+```{r}
+
+for (cond in seq.int(7,9)){
+  print(names(suj_avg_list)[cond])
+  anova_results <- purrr::map(suj_avg_list[[cond]][,2:11], ~aov(.x ~ suj_avg_list[[cond]]$level ))
+  for (measure in seq.int(1,10)){
+    print(colnames(suj_avg_list[[cond]])[measure+1])
+    print(summary(anova_results[[measure]]))
+  }
+}
+
+print(TukeyHSD(aov(HPC_HPC ~ level, data = suj_avg_list[["cue_load_effect"]])))
+print(TukeyHSD(aov(DMN_FFA ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(HPC_FFA ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(FPCN_PFC_FPCN_Par ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(FPCN_PFC_DMN ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(FPCN_Par_DMN ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(FPCN_Par_FFA ~ level, data = suj_avg_list[["delay_load_effect"]])))
+print(TukeyHSD(aov(FPCN_PFC_FFA ~ level, data = suj_avg_list[["probe_load_effect"]])))
+print(TukeyHSD(aov(FPCN_Par_FFA ~ level, data = suj_avg_list[["probe_load_effect"]])))
+
+```
+
+
+```{r investigate specific parts of FPCN}
+
+avg_data %>% 
+  select(PTID, FPCN_PFC_FPCN_Par, FPCN_PFC_DMN, FPCN_PFC_HPC, FPCN_PFC_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FPCN PFC region connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+avg_data %>% 
+  select(PTID, FPCN_PFC_FPCN_Par, FPCN_Par_DMN, FPCN_Par_HPC, FPCN_Par_FFA) %>%
+  melt() %>% 
+  filter(grepl("load_effect", PTID)) %>% 
+  ggplot(aes(x=variable, y =value, fill = PTID))+
+  geom_bar(stat="identity", position = "dodge")+
+  ggtitle("FPCN Parietal region connectivity")+
+  ylab("Connectivity")+
+  xlab("Network")+
+  theme_classic()
+
+
+```
+
+```{r plot load effects by group}
+
+plot_list_load_effect_FPCN <- list()
+
+for (cond in seq.int(7,9)){
+  
+  cond_list <- list()
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_PFC_FPCN_Par", "FPCN_PFC_DMN", "FPCN_PFC_HPC", "FPCN_PFC_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FPCN_PFC"]]
+  
+  
+  suj_avg_list[[cond]] %>% 
+    melt() %>%
+    filter(variable %in% c("FPCN_PFC_FPCN_Par", "FPCN_Par_DMN", "FPCN_Par_HPC", "FPCN_Par_FFA")) %>%
+    group_by(level, variable) %>% 
+    summarise(average = mean(value, na.rm=TRUE), se_val = se(value), se_min = average-se_val, se_max = average+se_val) %>% 
+    mutate(level = factor(level, levels = c("low", "med", "high"))) %>%
+    ggplot(aes(x=variable, y = average, fill=level)) + 
+    geom_bar(stat="identity", position = "dodge")+
+    geom_errorbar(aes(ymin = se_min, ymax = se_max), width=0.1, position = position_dodge(0.9))+
+    xlab("Regions")+
+    ylab("Average Connectivity")+
+    ggtitle(paste(names(suj_avg_list)[cond]))+
+    theme_classic()+
+    theme(aspect.ratio=1, axis.text.x = element_text(angle = 45, vjust = 0.5)) -> cond_list[["FPCN_Par"]]
+  
+  plot_list_load_effect_FPCN[[names(suj_avg_list)[cond]]] <- cond_list
+}
+
+
+plot_list_load_effect_FPCN[["cue_load_effect"]][["FPCN_PFC"]] + plot_list_load_effect_FPCN[["delay_load_effect"]][["FPCN_PFC"]] + plot_list_load_effect_FPCN[["probe_load_effect"]][["FPCN_PFC"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FPCN PFC regions Connectivity")
+
+plot_list_load_effect_FPCN[["cue_load_effect"]][["FPCN_Par"]] + plot_list_load_effect_FPCN[["delay_load_effect"]][["FPCN_Par"]]+ plot_list_load_effect_FPCN[["probe_load_effect"]][["FPCN_Par"]] +
+  plot_layout(guides="collect")+
+  plot_annotation(title = "FPCN parietal regions Connectivity")
+
+```
+
+```{r}
+
+for (cond in seq.int(7,9)){
+  print(names(suj_avg_list)[cond])
+  anova_results <- purrr::map(suj_avg_list[[cond]][,12:19], ~aov(.x ~ suj_avg_list[[cond]]$level ))
+  for (measure in seq.int(1,8)){
+    print(colnames(suj_avg_list[[cond]])[measure+11])
+    print(summary(anova_results[[measure]]))
+  }
+}
+
+
+```
+
+
+```{r}
+
+cor.test(suj_avg_list[["cue_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["cue_load_effect"]]$FPCN_Par_HPC)
+cor.test(suj_avg_list[["cue_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["cue_load_effect"]]$FPCN_Par_FFA)
+cor.test(suj_avg_list[["cue_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["cue_load_effect"]]$FPCN_Par_DMN)
+cor.test(suj_avg_list[["cue_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["cue_load_effect"]]$FPCN_PFC_FFA)
+
+
+cor.test(suj_avg_list[["probe_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["probe_load_effect"]]$FPCN_PFC_FPCN_Par)
+cor.test(suj_avg_list[["probe_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["probe_load_effect"]]$FPCN_Par_DMN)
+cor.test(suj_avg_list[["probe_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["probe_load_effect"]]$FPCN_Par_HPC)
+cor.test(suj_avg_list[["probe_load_effect"]]$omnibus_span_no_DFR, suj_avg_list[["probe_load_effect"]]$FPCN_Par_FFA)
+
+
+#ggplot(data = suj_avg_list[["probe_load_effect"]], aes(x=omnibus_span_no_DFR_MRI))
+
+```
+
+This is the code that ran to calculate the correlations of the beta series for each condition. It takes a while to run, so for the export, it doesn't run and a saved version is loaded. 
+
+```{r calculate similarity at each time period, eval=FALSE} 
+
+sim_list <- list()
+
+for (cond in seq.int(7,12)){
+  temp <- data.frame(matrix(nrow=169,ncol=169))
+  
+  for (sub1 in seq.int(1,169)){
+    for (sub2 in seq.int(1,169)){
+      
+      if (sub1 != 55 && sub2 != 55){
+        temp1 <- as.vector(suj_by_cond[[sub1]][[cond]])
+        temp1[temp1 == "Inf"] <- NA
+        temp2 <- as.vector(suj_by_cond[[sub2]][[cond]])
+        temp2[temp2 == "Inf"] <- NA
+        
+        temp[sub1,sub2] <- cor(temp1,temp2, use="pairwise.complete.obs")
+      }
+    }
+  }
+  sim_list[[cond-6]] <- temp
+  print(paste("finished cond:",cond))
+}
+
+#save(list = "sim_list", file = "data/BetaSeries/intersub_corr_beta_series.RData")
+```
+
+```{r load intersubject correlations for beta series, include=FALSE}
+
+load("data/BetaSeries/intersub_corr_beta_series.RData")
+
+```
+
+```{r calculate behavioral sim matrices}
+
+NN_sim <- data.frame(matrix(nrow=169,ncol=169))
+AK_sim <- data.frame(matrix(nrow=169,ncol=169))
+# need to remove subject 1024
+behav <- constructs_fMRI$omnibus_span_no_DFR[c(1:10,12:170)]
+
+for (sub1 in seq.int(1,169)){
+  for (sub2 in seq.int(1,169)){
+    NN_sim[sub1,sub2] <- 1/(1+sqrt(sum((behav[sub1] - behav[sub2]) ^ 2)))
+    AK_sim[sub1,sub2] <- (behav[sub1] + behav[sub2])/2
+  }
+}
+
+```
+
+```{r plot behav heatmaps}
+
+WM_order <- order(behav)
+
+ordered_NN_sim <- NN_sim[WM_order, WM_order]
+ordered_AK_sim <- AK_sim[WM_order, WM_order]
+colnames(ordered_NN_sim) <- paste("X",c(1:169),sep="")
+colnames(ordered_AK_sim) <- paste("X",c(1:169),sep="")
+
+ordered_NN_sim %>%
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  mutate(Y=as.numeric(gsub("X","",Y))) %>%
+  ggplot()+
+  geom_tile(aes(x=X,y=Y, fill=Z))+
+  theme_classic()+
+  theme(aspect.ratio=1, 
+        axis.line=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())+
+  labs(x="Subject", y="Subject", title = "Nearest Neighbor (NN) Similarity", fill="Similarity")
+
+ordered_AK_sim %>%
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  mutate(Y=as.numeric(gsub("X","",Y))) %>%
+  ggplot()+
+  geom_tile(aes(x=X,y=Y, fill=Z))+
+  theme_classic()+
+  theme(aspect.ratio=1, 
+        axis.line=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())+
+  labs(x="Subject", y="Subject", title = "AnnaK (AK) Similarity", fill="Similarity")
+
+
+
+```
+```{r}
+condition_list  <- c("Cue - High Load", "Delay - High Load", "Probe - High Load","Cue - Low Load", "Delay - Low Load", "Probe - Low Load" )
+
+for (cond in seq.int(1,6)){
+  sim_list[[cond]] %>%
+    as_tibble() %>%
+    rowid_to_column(var="X") %>%
+    gather(key="Y", value="Z", -1) %>%
+    mutate(Y=as.numeric(gsub("X","",Y))) %>%
+    ggplot()+
+    geom_tile(aes(x=X,y=Y, fill=Z))+
+    theme_classic()+
+    theme(aspect.ratio=1, 
+          axis.line=element_blank(),
+          axis.ticks = element_blank(),
+          axis.text = element_blank())+
+    scale_fill_gradient(limits = c(-0.25,1))+
+    labs(x="Subject", y="Subject", title = paste("Condition:",condition_list[cond]), fill="Similarity") -> temp_plot
+  print(temp_plot)
+}
+
+```
+
+
+```{r calculate similarities for beta series}
+
+NN_results_list <- data.frame(matrix(nrow=6,ncol=3))
+AK_results_list <- data.frame(matrix(nrow=6,ncol=3))
+
+rownames(NN_results_list) <- unlist(beta_series_cond_order)[7:12]
+rownames(AK_results_list) <- unlist(beta_series_cond_order)[7:12]
+
+colnames(NN_results_list) <- c("corr","p_val","mantel")
+colnames(AK_results_list) <- c("corr","p_val","mantel")
+
+upper_triangle_NN <- NN_sim[upper.tri(NN_sim)]
+upper_triangle_AK <- AK_sim[upper.tri(AK_sim)]
+
+for (cond in seq.int(1,6)){
+  temp_AK <- cor.test(upper_triangle_AK, sim_list[[cond]][upper.tri(sim_list[[cond]])], method="spearman")
+  temp_NN <- cor.test(upper_triangle_NN, sim_list[[cond]][upper.tri(sim_list[[cond]])], method="spearman")
+  NN_results_list$corr[cond] <- temp_NN$estimate
+  NN_results_list$p_val[cond] <- temp_NN$p.value
+  AK_results_list$corr[cond] <- temp_AK$estimate
+  AK_results_list$p_val[cond] <- temp_AK$p.value
+}
+
+
+```
+
+```{r mantel tests for beta series}
+
+AK_perm <- data.frame(matrix(nrow=10000,ncol=6))
+NN_perm <- data.frame(matrix(nrow=10000,ncol=6))
+
+for (cond in seq.int(1,6)){
+  for (perm_idx in seq.int(1,10000)){
+    #shuffle behav data
+    shuff = sample(1:169,169)
+    shuff_AK <- AK_sim[shuff,shuff]
+    shuff_NN <- NN_sim[shuff,shuff]
+    AK_perm[perm_idx, cond] <- cor(sim_list[[cond]][upper.tri(sim_list[[cond]])], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+    NN_perm[perm_idx, cond] <- cor(sim_list[[cond]][upper.tri(sim_list[[cond]])], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+  }
+  print(paste("finished cond:",cond))
+  
+}
+
+NN_plot_data <-data.frame(matrix(nrow=6,ncol=4))
+AK_plot_data <-data.frame(matrix(nrow=6,ncol=4))
+colnames(NN_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+colnames(AK_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+
+NN_plot_data$corr <- NN_results_list$corr
+AK_plot_data$corr <- AK_results_list$corr
+
+for (cond in seq.int(1,6)){
+  NN_plot_data$pctl_90[cond] <- quantile(NN_perm[,cond],0.9, na.rm=TRUE)
+  NN_plot_data$pctl_95[cond] <- quantile(NN_perm[,cond],0.95, na.rm=TRUE)
+  NN_plot_data$pctl_99[cond] <- quantile(NN_perm[,cond],0.99, na.rm=TRUE)
+  
+  AK_plot_data$pctl_90[cond] <- quantile(AK_perm[,cond],0.9, na.rm=TRUE)
+  AK_plot_data$pctl_95[cond] <- quantile(AK_perm[,cond],0.95, na.rm=TRUE)
+  AK_plot_data$pctl_99[cond] <- quantile(AK_perm[,cond],0.99, na.rm=TRUE)
+  
+  # get p values from permutation distribution
+  AK_results_list$mantel[cond] <- 1-ecdf(AK_perm[,cond])(AK_results_list$corr[cond])
+  NN_results_list$mantel[cond] <- 1-ecdf(NN_perm[,cond])(NN_results_list$corr[cond])
+  
+}
+
+```
+
+```{r plot permutation test data}
+
+
+for (cond in seq.int(1,6)){
+  ggplot()+
+    geom_histogram(data = NN_perm,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = NN_plot_data %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = NN_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+    theme_classic() -> NN_plot
+  
+  ggplot()+
+    geom_histogram(data = AK_perm,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = AK_plot_data %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = AK_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+    theme_classic() -> AK_plot
+  print(NN_plot + AK_plot+
+          plot_annotation(title = paste("Condition:",condition_list[cond])))
+  
+}
+
+```
+
+```{python get rest data}
+
+import numpy as np 
+
+rest_data = np.load("data/cross_sub_yeo_RS_corr.npy")
+
+```
+
+
+```{r get rest data from python}
+
+rest_data <- py$rest_data
+# had to additionally remove subject 1554 from rest data, so deal with that
+rest_data_mat <- data.frame(matrix(nrow=169,ncol=169))
+rest_data_mat[1:71,1:71] <- rest_data[1:71,1:71]
+rest_data_mat[73:169,1:71] <- rest_data[72:168, 1:71]
+rest_data_mat[1:71,73:169] <- rest_data[1:71, 72:168]
+rest_data_mat[73:169, 73:169] <- rest_data[72:168, 72:168]
+# need to take atanh of matrix to do stats so make the NAs 1; will filter out Inf later
+rest_data_mat[1:72,72] <- 1
+rest_data_mat[72,1:72] <- 1
+
+rest_data <- atanh(rest_data_mat)
+```
+
+```{r calculate similarities for rest}
+
+rest_results_list <- data.frame(matrix(nrow=2,ncol=3))
+rest_data[rest_data == "Inf"] <- NA
+upper_triangle_rest <- rest_data[upper.tri(rest_data)]
+
+rest_perm <- data.frame(matrix(nrow=10000, ncol=2))
+colnames(rest_perm) <-  c("NN","AK")
+
+rownames(rest_results_list) <- c("NN","AK")
+
+colnames(rest_results_list) <- c("corr","p_val", "mantel")
+
+temp_rest_AK <- cor.test(upper_triangle_AK, upper_triangle_rest, method="spearman")
+temp_rest_NN <- cor.test(upper_triangle_NN, upper_triangle_rest, method="spearman")
+rest_results_list$corr[1] <- temp_rest_NN$estimate
+rest_results_list$p_val[1] <- temp_rest_NN$p.value
+rest_results_list$corr[2] <- temp_rest_AK$estimate
+rest_results_list$p_val[2] <- temp_rest_AK$p.value
+
+for (perm_idx in seq.int(1,10000)){
+  #shuffle behav data
+  shuff = sample(1:169,169)
+  shuff_AK <- AK_sim[shuff,shuff]
+  shuff_NN <- NN_sim[shuff,shuff]
+  rest_perm$AK[perm_idx] <- cor(rest_data[upper.tri(rest_data)], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+  rest_perm$NN[perm_idx] <- cor(rest_data[upper.tri(rest_data)], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+}
+
+rest_plot_data <-data.frame(matrix(nrow=2,ncol=4))
+colnames(rest_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+rownames(rest_plot_data) <- c("NN","AK")
+
+rest_plot_data$corr <- rest_results_list$corr
+rest_plot_data$pctl_90[1] <- quantile(rest_perm$NN,0.9,na.rm=TRUE)
+rest_plot_data$pctl_95[1] <- quantile(rest_perm$NN,0.95,na.rm=TRUE)
+rest_plot_data$pctl_99[1] <- quantile(rest_perm$NN,0.99,na.rm=TRUE)
+rest_plot_data$pctl_90[2] <- quantile(rest_perm$AK,0.9,na.rm=TRUE)
+rest_plot_data$pctl_95[2] <- quantile(rest_perm$AK,0.95,na.rm=TRUE)
+rest_plot_data$pctl_99[2] <- quantile(rest_perm$AK,0.99,na.rm=TRUE)
+
+# get p value from distribution
+rest_results_list$mantel[1] <- 1-ecdf(rest_perm$NN)(rest_plot_data$corr[1])
+rest_results_list$mantel[2] <- 1-ecdf(rest_perm$AK)(rest_plot_data$corr[2])
+
+
+```
+
+```{r plot rest permutation data}
+
+ggplot()+
+  geom_histogram(data = rest_perm,aes(x=NN))+
+  geom_vline(data = rest_plot_data %>% select(corr) %>% filter(row_number()==1), aes(xintercept=corr), color="red")+
+  geom_vline(data = rest_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==1) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+             aes(xintercept = pctls),linetype="dotted")+
+  labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+  theme_classic() -> NN_rest_plot
+
+ggplot()+
+  geom_histogram(data = rest_perm,aes(x=AK))+
+  geom_vline(data = rest_plot_data %>% select(corr) %>% filter(row_number()==2), aes(xintercept=corr), color="red")+
+  geom_vline(data = rest_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==2) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+             aes(xintercept = pctls),linetype="dotted")+
+  labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+  theme_classic() -> AK_rest_plot
+NN_rest_plot + AK_rest_plot+
+  plot_annotation(title = "Resting State")
+
+
+```

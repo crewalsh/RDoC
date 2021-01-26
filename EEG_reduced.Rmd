@@ -21,6 +21,9 @@ library(patchwork)
 library(rmatio)
 library(reshape2)
 library(kableExtra)
+library(interactions)
+library(readxl)
+library(MASS)
 
 load("data/behav.RData")
 load("data/load_effects_DFR.RData")
@@ -86,6 +89,8 @@ ERPS_Pavg_DFR <- average_electrodes(list(ERPS_Pz_DFR,ERPS_P1_DFR, ERPS_P2_DFR,ER
 ERSPS_Favg_DFR <- average_electrodes_spectrum(list(ERSPS_Fz_DFR, ERSPS_F1_DFR, ERSPS_F2_DFR, ERSPS_AFz_DFR, ERSPS_FC1_DFR, ERSPS_FC2_DFR))
 
 #save(list=c("CDA","CDA_fMRI","ERPS_times_DFR", "ERPS_times_LCD", "ERSPS_times_DFR", "ERSPS_times_LCD", "ERSPS_freqs", "ERPS_midOccip_LCD", "ERSPS_midOccip_LCD", "ERSPS_Oz_LCD","ERSPS_O2_LCD","ERSPS_O1_LCD", "ERPS_Pz_LCD","ERPS_Fz_LCD", "ERPS_midOccip_DFR", "ERSPS_midOccip_DFR", "ERSPS_Oz_DFR","ERPS_Pz_DFR"), file="data/newEEG_data.RData")
+
+#save(list=c("fMRI_PTID", "CDA","CDA_fMRI","ERPS_times_DFR", "ERSPS_times_DFR", "ERSPS_freqs", "ERPS_midOccip_DFR","ERSPS_midOccip_DFR", "ERPS_Oavg_DFR","ERSPS_Oz_DFR","ERPS_Pz_DFR", "ERPS_Pavg_DFR"), file="data/EEG_for_Will.RData")
 
 rects <- data.frame(xstart=c(0,5500),xend=c(2500,7000),col = "gray")
 
@@ -418,9 +423,47 @@ probe_P3_DFR_anova <- merge(probe_average_P3,WM_to_merge, by="PTID")
 
 #### Scatter plots 
 
-Here, we want to look to see uf there are any obvious relationshihps between span and ERP measures (removing any outliers). We don't see anything really strong.  
+Here, we want to look to see uf there are any obvious relationships between span and ERP measures (removing any outliers) for the load effects, but there is a significant linear relationship between P3 during cue at high load and omnibus span. We don't see anything really strong for the load effects.  
 
-```{r scatter plots span vs ERP measures}
+```{r scatter plots span vs ERP high load measures}
+
+merge(cue_midOccip_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(high_load < mean(high_load)+3*(sd(high_load))) %>%
+  filter(high_load > mean(high_load)-3*(sd(high_load))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = high_load)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("high load - cue n170 in midOccip")+
+  theme_classic()
+
+summary(cue_midOccip_n170 <- MASS::rlm(high_load ~ omnibus_span_no_DFR, data = merge(cue_midOccip_n170_DFR_anova, constructs_fMRI)))
+
+merge(cue_Oavg_n170_DFR_anova, constructs_fMRI) %>% 
+  filter(high_load < mean(high_load)+3*(sd(high_load))) %>%
+  filter(high_load > mean(high_load)-3*(sd(high_load))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = high_load)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("high load - cue Oavg in midOccip")+
+  theme_classic()
+
+summary(cue_Oavg_n170 <- MASS::rlm(high_load ~ omnibus_span_no_DFR, data = merge(cue_Oavg_n170_DFR_anova, constructs_fMRI)))
+
+merge(cue_P3_DFR_anova, constructs_fMRI) %>% 
+  filter(high_load < mean(high_load)+3*(sd(high_load))) %>%
+  filter(high_load > mean(high_load)-3*(sd(high_load))) %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = high_load)) +
+  geom_point()+
+  stat_smooth(method="lm")+ 
+  ylab("high load - cue P3")+
+  theme_classic()
+
+summary(cue_P3 <- MASS::rlm(high_load ~ omnibus_span_no_DFR, data = merge(cue_P3_DFR_anova, constructs_fMRI)))
+
+
+```
+
+```{r scatter plots span vs ERP load effect measures}
 
 merge(cue_midOccip_n170_DFR_anova, constructs_fMRI) %>% 
   filter(load_effect < mean(load_effect)+3*(sd(load_effect))) %>%
@@ -1247,6 +1290,24 @@ beta <- list(
     load_effect = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]][37:45,,], c(2,3), mean))))
 )
 
+theta <- list(
+  
+  ERSPS_midOccip_DFR = list(
+    high_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["high_load"]][1:25,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["low_load"]][1:25,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_midOccip_DFR$PTID,t(apply(ERSPS_midOccip_DFR[["data"]][["load_effect"]][1:25,,], c(2,3), mean)))),  
+  
+  ERSPS_Favg_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["high_load"]][1:25,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["low_load"]][1:25,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Favg_DFR$PTID,t(apply(ERSPS_Favg_DFR[["data"]][["load_effect"]][1:25,,], c(2,3), mean)))),
+  
+  ERSPS_Oz_DFR = list(
+    high_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["high_load"]][1:25,,], c(2,3), mean))),
+    low_load = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["low_load"]][1:25,,], c(2,3), mean))),
+    load_effect = data.frame(PTID = ERSPS_Oz_DFR$PTID,t(apply(ERSPS_Oz_DFR[["data"]][["load_effect"]][1:25,,], c(2,3), mean))))
+)
+
 low_gamma <- list(
   
   ERSPS_midOccip_DFR = list(
@@ -1343,6 +1404,23 @@ beta_list <- list(
     time = ERSPS_times_DFR)
 )
 
+theta_list <- list(
+  ERSPS_midOccip_DFR = data.frame(
+    high_load = apply(theta[["ERSPS_midOccip_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(theta[["ERSPS_midOccip_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(theta[["ERSPS_midOccip_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),  
+  ERSPS_Oz_DFR = data.frame(
+    high_load = apply(theta[["ERSPS_Oz_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(theta[["ERSPS_Oz_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(theta[["ERSPS_Oz_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR),
+  ERSPS_Favg_DFR = data.frame(
+    high_load = apply(theta[["ERSPS_Favg_DFR"]][["high_load"]][,2:153], 2, mean),
+    low_load = apply(theta[["ERSPS_Favg_DFR"]][["low_load"]][,2:153], 2, mean),
+    load_effect = apply(theta[["ERSPS_Favg_DFR"]][["load_effect"]][,2:153], 2, mean),
+    time = ERSPS_times_DFR)
+)
 
 low_gamma_list <- list(
   ERSPS_midOccip_DFR = data.frame(
@@ -1370,6 +1448,7 @@ alpha_plot_list <- list()
 low_alpha_plot_list <- list()
 high_alpha_plot_list <- list()
 beta_plot_list <- list()
+theta_plot_list <- list()
 low_gamma_plot_list <- list()
 
 for (cluster in seq.int(1,length(alpha))){
@@ -1439,6 +1518,26 @@ for (cluster in seq.int(1,length(beta))){
     geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
     geom_line(aes(x=time,y=load_effect))+
     ylab("beta power")+
+    ggtitle("Load Effect")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()
+  
+}
+
+for (cluster in seq.int(1,length(theta))){
+  theta_plot_list[[names(theta_list)[cluster]]][["indiv_loads"]] <- ggplot(data = theta_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=high_load))+
+    geom_line(aes(x=time,y=low_load),linetype="dotted")+
+    ylab("theta power")+
+    ggtitle("Low Load vs High Load")+
+    scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
+    theme_classic()
+  
+  theta_plot_list[[names(theta_list)[cluster]]][["LE"]] <- ggplot(data = theta_list[[cluster]])+
+    geom_rect(data=rects,aes(xmin=xstart, xmax=xend, ymin = -Inf, ymax=Inf,alpha =0.005),fill="grey",show.legend = FALSE)+
+    geom_line(aes(x=time,y=load_effect))+
+    ylab("theta power")+
     ggtitle("Load Effect")+
     scale_x_continuous(breaks = seq(-500,7000, by = 1000))+
     theme_classic()
@@ -1537,7 +1636,7 @@ high_alpha_delay_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]
 
 high_alpha_late_delay_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],3375.00000,5261.71875,ERSPS_times_DFR)
 high_alpha_late_delay_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],3226.56250,	
-5261.71875,ERSPS_times_DFR)
+                                                          5261.71875,ERSPS_times_DFR)
 
 high_alpha_probe_average_midOccip <- select_period_average(high_alpha[["ERSPS_midOccip_DFR"]],6007.81250,6800.78125,ERSPS_times_DFR)
 high_alpha_probe_average_Oz <- select_period_average(high_alpha[["ERSPS_Oz_DFR"]],6058.59375,6851.56250,ERSPS_times_DFR)
@@ -1565,23 +1664,23 @@ ERSP_behav_corr_data <- constructs_fMRI[,c(1,8)]
 ERSP_behav_corr_data$LE <- p200_delay_DFR$DFR_Load3_Load1
 ERSP_behav_corr_data[,4] <- p200_data[p200_data$PTID %in% constructs_fMRI$PTID, 7]
 
-
-
 alpha_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
                      list(alpha_cue_average_midOccip[,c(1,4)], alpha_cue_average_Oz[,c(1,4)],
                           alpha_delay_average_Oz[,c(1,4)],alpha_probe_average_midOccip[,c(1,4)],
-                          alpha_probe_average_Oz[,c(1,4)]))
-colnames(alpha_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_Oz", "probe_midOccip", "probe_Oz")
+                          alpha_probe_average_Oz[,c(1,4)], alpha_cue_average_midOccip[,c(1,2)], 
+                          alpha_cue_average_Oz[,c(1,2)]))
+colnames(alpha_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_Oz", "probe_midOccip", "probe_Oz", "cue_midOccip_high", 
+                          "cue_Oz_high")
 
 alpha_behav <- merge(ERSP_behav_corr_data,alpha_data, by = "PTID")
 
-for (col in seq.int(5,9)){
+for (col in seq.int(5,11)){
   alpha_behav[((alpha_behav[,col] > mean(alpha_behav[,col])+3*sd(alpha_behav[,col])) | 
                  (alpha_behav[,col] < mean(alpha_behav[,col])-3*sd(alpha_behav[,col]))), col] <- NA
 }
 
 
-for (col in seq.int(5,9)){
+for (col in seq.int(5,11)){
   print(ggplot(data = alpha_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(alpha_behav)[col]))+
           geom_point()+
           stat_smooth(method="lm")+
@@ -1589,11 +1688,9 @@ for (col in seq.int(5,9)){
           theme(aspect.ratio=1))
   print(colnames(alpha_behav)[col])
   print(cor.test(alpha_behav$omnibus_span_no_DFR, alpha_behav[,col]))
-  
 }
 
 ```
-
 
 ```{r split freqs into groups}
 
@@ -1601,11 +1698,13 @@ alphas_for_plot <- list()
 betas_for_plot <- list()
 low_alphas_for_plot <- list()
 high_alphas_for_plot <- list()
+thetas_for_plot <- list()
 low_gammas_for_plot <- list()
 load_list <- c("low_load", "high_load", "load_effect")
 ERSPS_list <- list( 
   ERSPS_midOccip_DFR = ERSPS_midOccip_DFR, 
-  ERSPS_Oz_DFR = ERSPS_Oz_DFR)
+  ERSPS_Oz_DFR = ERSPS_Oz_DFR, 
+  ERSPS_Fz_DFR = ERSPS_Fz_DFR)
 
 for (cluster in seq.int(1,2)){
   temp <- list()
@@ -1655,6 +1754,19 @@ for (cluster in seq.int(1,2)){
   }
 }
 
+for (cluster in seq.int(1,3)){
+  temp <- list()
+  for (load in seq.int(1,3)){
+    temp[[load_list[load]]] <- theta[[cluster]][[load]]
+  }
+  if (substr(names(theta)[cluster],nchar(names(theta)[cluster])-4,nchar(names(theta)[cluster])-2) == "LCD"){
+    thetas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups, ERSPS_times_LCD)
+  } else{
+    thetas_for_plot[[names(ERSPS_list)[cluster]]] <- split_ERPs_into_groups(temp, WM_groups, ERSPS_times_DFR)
+  }
+}
+
+
 for (cluster in seq.int(1,2)){
   temp <- list()
   for (load in seq.int(1,3)){
@@ -1683,6 +1795,7 @@ split_alphas_plot <- create_TC_for_plot(alphas_for_plot)
 split_low_alphas_plot <- create_TC_for_plot(low_alphas_for_plot)
 split_high_alphas_plot <- create_TC_for_plot(high_alphas_for_plot)
 split_betas_plot <- create_TC_for_plot(betas_for_plot)
+split_thetas_plot <- create_TC_for_plot(thetas_for_plot)
 split_low_gammas_plot <- create_TC_for_plot(low_gammas_for_plot)
 
 ```
@@ -1902,6 +2015,27 @@ low_alpha_probe_Oz_DFR_anova <- merge(low_alpha_probe_average_Oz,WM_to_merge, by
 
 ```
 
+```{r examine linear correlation for low alpha high load}
+
+low_alpha_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(low_alpha_cue_midOccip_DFR_anova, constructs_fMRI)))
+high_midOccip_cue_low_alpha.aov <- aov(high_load ~ level, data = merge(low_alpha_cue_midOccip_DFR_anova, constructs_fMRI))
+summary(high_midOccip_cue_low_alpha.aov)
+TukeyHSD(high_midOccip_cue_low_alpha.aov)
+```
+
+
 ```{r plot split group low_alpha - load effects}
 
 low_alpha_cue_Oz_DFR_split_prepped[["melt_data"]] %>% 
@@ -2068,7 +2202,26 @@ high_alpha_probe_Oz_DFR_anova <- merge(high_alpha_probe_average_Oz,WM_to_merge, 
 
 ```
 
-None of these are signficant - only caveat is that I haven't removed outliers, because I wasn't sure at what level to remove them from - averages over time? at each time point? 
+```{r examine linear correlation for high alpha high load}
+
+high_alpha_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(high_alpha_cue_midOccip_DFR_anova, constructs_fMRI)))
+high_midOccip_cue_high_alpha.aov <- aov(high_load ~ level, data = merge(high_alpha_cue_midOccip_DFR_anova, constructs_fMRI))
+summary(high_midOccip_cue_high_alpha.aov)
+TukeyHSD(high_midOccip_cue_high_alpha.aov)
+
+```
 
 ```{r plot split group high_alpha - load effects}
 
@@ -2271,17 +2424,18 @@ beta_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
                     list(beta_cue_average_midOccip[,c(1,4)], beta_cue_average_Oz[,c(1,4)],
                          beta_delay_average_midOccip[,c(1,4)],beta_delay_average_Oz[,c(1,4)],
                          beta_probe_average_midOccip[,c(1,4)],
-                         beta_probe_average_Oz[,c(1,4)]))
-colnames(beta_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz")
+                         beta_probe_average_Oz[,c(1,4)], beta_cue_average_midOccip[,c(1,2)],
+                         beta_cue_average_midOccip[,c(1,2)]))
+colnames(beta_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz", "high_midOccip_cue", "high_Oz_cue")
 
 beta_behav <- merge(ERSP_behav_corr_data,beta_data, by = "PTID")
 
-for (col in seq.int(5,9)){
+for (col in seq.int(5,11)){
   beta_behav[((beta_behav[,col] > mean(beta_behav[,col])+3*sd(beta_behav[,col])) | 
                 (beta_behav[,col] < mean(beta_behav[,col])-3*sd(beta_behav[,col]))), col] <- NA
 }
 
-for (col in seq.int(5,10)){
+for (col in seq.int(5,11)){
   print(ggplot(data = beta_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(beta_behav)[col]))+
           geom_point()+
           stat_smooth(method="lm")+
@@ -2345,6 +2499,27 @@ beta_probe_midOccip_DFR_anova <- merge(beta_probe_average_midOccip,WM_to_merge, 
 beta_cue_Oz_DFR_anova <- merge(beta_cue_average_Oz,WM_to_merge, by="PTID")
 beta_delay_Oz_DFR_anova <- merge(beta_delay_average_Oz,WM_to_merge, by="PTID")
 beta_probe_Oz_DFR_anova <- merge(beta_probe_average_Oz,WM_to_merge, by="PTID")
+
+```
+
+```{r examine linear correlation for beta high load}
+
+beta_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(beta_cue_midOccip_DFR_anova, constructs_fMRI)))
+high_midOccip_cue_beta.aov <- aov(high_load ~ level, data = merge(beta_cue_midOccip_DFR_anova, constructs_fMRI))
+summary(high_midOccip_cue_beta.aov)
+TukeyHSD(high_midOccip_cue_beta.aov)
 
 ```
 
@@ -2454,6 +2629,195 @@ print("beta - delay Oz")
 print(summary(beta_delay_Oz.aov))
 ```
 
+## Theta 
+
+### All Subjects 
+
+```{r plot theta}
+
+theta_plot_list[["ERSPS_Favg_DFR"]][["indiv_loads"]] + theta_plot_list[["ERSPS_Favg_DFR"]][["LE"]] +
+  plot_annotation(title="Fz - theta during DFR")
+
+``` 
+
+```{r select out times with significant load effects - theta}
+
+theta_Favg_times <- time_sig_load_effects(theta[["ERSPS_Favg_DFR"]][["load_effect"]], ERSPS_times_DFR)
+
+```
+
+```{r select out cue delay probe from theta}
+
+theta_cue_average_Favg <- select_period_average(theta[["ERSPS_Favg_DFR"]],1585.93750,1738.28125,ERSPS_times_DFR)
+
+theta_delay_average_Favg <- select_period_average(theta[["ERSPS_Favg_DFR"]],2730.46875,2929.68750,ERSPS_times_DFR)
+
+theta_probe_average_Favg <- select_period_average(theta[["ERSPS_Favg_DFR"]],5511.71875,7000.00000,ERSPS_times_DFR)
+
+```
+
+```{r correlate span to theta load effects}
+
+theta_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
+                         list(theta_cue_average_Favg[,c(1,4)], 
+                              theta_delay_average_Favg[,c(1,4)],
+                              theta_probe_average_Favg[,c(1,4)], 
+                              theta_cue_average_Favg[,c(1,2)]))
+colnames(theta_data) <- c("PTID", "cue_Favg", "delay_Favg", "probe_Favg","cue_Favg_high")
+
+theta_behav <- merge(ERSP_behav_corr_data,theta_data, by = "PTID")
+
+for (col in seq.int(5,8)){
+  theta_behav[((theta_behav[,col] > mean(theta_behav[,col])+3*sd(theta_behav[,col])) | 
+                     (theta_behav[,col] < mean(theta_behav[,col])-3*sd(theta_behav[,col]))), col] <- NA
+}
+
+for (col in seq.int(5,8)){
+  print(ggplot(data = theta_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(theta_behav)[col]))+
+          geom_point()+
+          stat_smooth(method="lm")+
+          theme_classic()+
+          theme(aspect.ratio=1))
+  print(colnames(theta_behav)[col])
+  print(cor.test(theta_behav$omnibus_span_no_DFR, theta_behav[,col]))
+  
+}
+
+```
+### Split by WMC 
+
+```{r plot theta by groups}
+
+
+Favg_DFR_theta <- paired_freq_plot(split_thetas_plot[["ERSPS_Fz_DFR"]][["long"]], c("high","low", "load_effect"))
+
+Favg_DFR_theta[[1]] + Favg_DFR_theta[[2]]+
+  plot_annotation(title="Favg - theta during DFR")+
+  plot_layout(guides="collect")
+
+
+```
+
+
+```{r prep theta for bar plots}
+
+theta_cue_Favg_DFR_split <- split_into_groups(theta_cue_average_Favg, WM_groups)
+
+theta_delay_Favg_DFR_split <- split_into_groups(theta_delay_average_Favg, WM_groups)
+
+theta_probe_Favg_DFR_split <- split_into_groups(theta_probe_average_Favg, WM_groups)
+
+theta_cue_Favg_DFR_split_prepped <- prep_split_for_bar_plots(theta_cue_Favg_DFR_split)
+
+theta_delay_Favg_DFR_split_prepped <- prep_split_for_bar_plots(theta_delay_Favg_DFR_split)
+
+theta_probe_Favg_DFR_split_prepped <- prep_split_for_bar_plots(theta_probe_Favg_DFR_split)
+
+```
+
+```{r prep anovas for theta}
+
+theta_cue_Favg_DFR_anova <- merge(theta_cue_average_Favg,WM_to_merge, by="PTID")
+theta_delay_Favg_DFR_anova <- merge(theta_delay_average_Favg,WM_to_merge, by="PTID")
+theta_probe_Favg_DFR_anova <- merge(theta_probe_average_Favg,WM_to_merge, by="PTID")
+
+```
+
+```{r examine linear correlation for theta high load}
+
+theta_cue_Favg_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(theta_cue_Favg_DFR_anova, constructs_fMRI)))
+high_Favg_cue_theta.aov <- aov(high_load ~ level, data = merge(theta_cue_Favg_DFR_anova, constructs_fMRI))
+summary(high_Favg_cue_theta.aov)
+TukeyHSD(high_Favg_cue_theta.aov)
+
+```
+
+```{r plot split group theta load effect}
+
+theta_cue_Favg_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> theta_cue_Favg_LE
+
+theta_delay_Favg_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Delay")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> theta_delay_Favg_LE
+
+theta_probe_Favg_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="load_effect") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Probe")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) -> theta_probe_Favg_LE
+
+theta_cue_Favg_LE + theta_delay_Favg_LE + theta_probe_Favg_LE+
+  plot_annotation(title="Favg cluster theta frequency Load Effect during DFR")
+
+```
+
+```{r run anovas for theta - load effect}
+
+theta_cue_Favg.aov <- aov(load_effect ~ level, data = theta_cue_Favg_DFR_anova)
+print("theta - cue Favg")
+print(summary(theta_cue_Favg.aov))
+theta_delay_Favg.aov <- aov(load_effect ~ level, data = theta_delay_Favg_DFR_anova)
+print("theta - delay Favg")
+print(summary(theta_delay_Favg.aov))
+
+```
+
+```{r check for relationship between theta and MRI load effects}
+
+for (col in seq.int(5,8)){
+  print(ggplot(data = theta_behav, aes_string(x="LE", y = colnames(theta_behav)[col]))+
+          geom_point()+
+          stat_smooth(method="lm")+
+          theme_classic()+
+          theme(aspect.ratio=1))
+  print(colnames(theta_behav)[col])
+  print(cor.test(theta_behav$LE, theta_behav[,col]))
+  
+}
+
+summary(rlm(probe_Favg ~ LE, data = theta_behav))
+summary(rlm(cue_Favg_high ~ LE, data = theta_behav))
+
+
+```
+
+
 ## Low Gamma
 
 ### All Subjects
@@ -2510,17 +2874,19 @@ low_gamma_data <- Reduce(function(x,y) merge(x,y, by="PTID"),
                          list(low_gamma_cue_average_midOccip[,c(1,4)], low_gamma_cue_average_Oz[,c(1,4)],
                               low_gamma_delay_average_midOccip[,c(1,4)],low_gamma_delay_average_Oz[,c(1,4)],
                               low_gamma_probe_average_midOccip[,c(1,4)],
-                              low_gamma_probe_average_Oz[,c(1,4)]))
-colnames(low_gamma_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz")
+                              low_gamma_probe_average_Oz[,c(1,4)], 
+                              low_gamma_probe_average_midOccip[,c(1,2)],
+                              low_gamma_probe_average_Oz[,c(1,2)]))
+colnames(low_gamma_data) <- c("PTID", "cue_midOccip", "cue_Oz", "delay_midOccip","delay_Oz", "probe_midOccip", "probe_Oz", "cue_midOccip_high", "cue_Oz_high")
 
 low_gamma_behav <- merge(ERSP_behav_corr_data,low_gamma_data, by = "PTID")
 
-for (col in seq.int(5,9)){
+for (col in seq.int(5,11)){
   low_gamma_behav[((low_gamma_behav[,col] > mean(low_gamma_behav[,col])+3*sd(low_gamma_behav[,col])) | 
                      (low_gamma_behav[,col] < mean(low_gamma_behav[,col])-3*sd(low_gamma_behav[,col]))), col] <- NA
 }
 
-for (col in seq.int(5,10)){
+for (col in seq.int(5,11)){
   print(ggplot(data = low_gamma_behav, aes_string(x="omnibus_span_no_DFR", y = colnames(low_gamma_behav)[col]))+
           geom_point()+
           stat_smooth(method="lm")+
@@ -2541,7 +2907,6 @@ In the raw power, however, we do see differences between groups in the cue and d
 
 
 ```{r plot low_gamma by groups}
-
 
 midOccip_DFR_low_gamma <- paired_freq_plot(split_low_gammas_plot[["ERSPS_midOccip_DFR"]][["long"]], c("high","low", "load_effect"))
 Oz_DFR_low_gamma <- paired_freq_plot(split_low_gammas_plot[["ERSPS_Oz_DFR"]][["long"]], c("high","low", "load_effect"))
@@ -2588,6 +2953,45 @@ low_gamma_cue_Oz_DFR_anova <- merge(low_gamma_cue_average_Oz,WM_to_merge, by="PT
 low_gamma_delay_Oz_DFR_anova <- merge(low_gamma_delay_average_Oz,WM_to_merge, by="PTID")
 low_gamma_probe_Oz_DFR_anova <- merge(low_gamma_probe_average_Oz,WM_to_merge, by="PTID")
 
+
+```
+
+```{r examine linear correlation for low gamma high load}
+
+low_gamma_cue_midOccip_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(low_gamma_cue_midOccip_DFR_anova, constructs_fMRI)))
+high_midOccip_cue_low_gamma.aov <- aov(high_load ~ level, data = merge(low_gamma_cue_midOccip_DFR_anova, constructs_fMRI))
+summary(high_midOccip_cue_low_gamma.aov)
+TukeyHSD(high_midOccip_cue_low_gamma.aov)
+
+
+low_gamma_cue_Oz_DFR_split_prepped[["melt_data"]] %>% 
+  filter(variable=="high_load") %>% 
+  mutate(level = factor(level, levels =c("low","med","high"))) %>%
+  ggplot()+
+  geom_bar(aes(x=level,y=Means),stat="identity")+
+  geom_errorbar(aes(x=level,ymin=Means-SE, ymax=Means+SE), width=0.2)+
+  ggtitle("Cue")+ 
+  xlab("WMC")+
+  ylab("ERP amplitude LE")+
+  theme_classic()+
+  theme(aspect.ratio = 1) 
+
+summary(rlm(omnibus_span_no_DFR ~ high_load, data = merge(low_gamma_cue_Oz_DFR_anova, constructs_fMRI)))
+high_Oz_cue_low_gamma.aov <- aov(high_load ~ level, data = merge(low_gamma_cue_Oz_DFR_anova, constructs_fMRI))
+summary(high_Oz_cue_low_gamma.aov)
+TukeyHSD(high_Oz_cue_low_gamma.aov)
 
 ```
 
@@ -2714,7 +3118,7 @@ First, let's take a look at the raw data, just for sanity's sake.
 ```{r plot raw CDA}
 
 CDA_fMRI %>% 
-  select(c("LCD_CDA_1dots", "LCD_CDA_3dots", "LCD_CDA_5dots")) %>% 
+  dplyr::select(c("LCD_CDA_1dots", "LCD_CDA_3dots", "LCD_CDA_5dots")) %>% 
   melt() %>% 
   ggplot(aes(x=variable,y=value))+
   geom_jitter()+
@@ -2723,7 +3127,7 @@ CDA_fMRI %>%
   ylab("CDA")
 
 CDA_fMRI %>% 
-  select(c("CDA_3_1", "CDA_5_1", "CDA_5_3")) %>% 
+  dplyr::select(c("CDA_3_1", "CDA_5_1", "CDA_5_3")) %>% 
   melt() %>% 
   ggplot(aes(x=variable,y=value))+
   geom_jitter()+
@@ -2741,56 +3145,97 @@ Other studies have shown a relationship between the CDA and capacity as measured
 
 ```{r scatters - span vs raw CDA}
 
-data_to_plot <- data.frame(CDA_fMRI, p200_delay_DFR, omnibus_span = constructs_fMRI$omnibus_span_no_DFR)
+data_to_plot <- data.frame(CDA_fMRI, p200_delay_DFR,p200_indiv_ROI_DFR_delay, omnibus_span = constructs_fMRI$omnibus_span_no_DFR)
 data_to_plot <- merge(data_to_plot,p200_cog)
 
 (ggplot(data_to_plot,aes(x=DFR_Load3_Load1, y=LCD_CDA_5dots))+
     geom_point()+
     stat_smooth(method="lm")+
+    ylim(c(-5,2.5))+
     theme_classic())+(ggplot(data_to_plot,aes(x=DFR_Load3_Load1, y=LCD_CDA_3dots))+
                         geom_point()+
                         stat_smooth(method="lm")+
+                        ylim(c(-5,2.5))+
                         theme_classic())+(ggplot(data_to_plot,aes(x=DFR_Load3_Load1, y=LCD_CDA_1dots))+
                                             geom_point()+
                                             stat_smooth(method="lm")+
+                                            ylim(c(-5,2.5))+
                                             theme_classic()+
                                             theme(aspect.ratio=1))
 
-cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$DFR_Load3_Load1)
-cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$DFR_Load3_Load1)
-cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$DFR_Load3_Load1)
+# cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$DFR_Load3_Load1)
+summary(rlm(DFR_Load3_Load1 ~ LCD_CDA_5dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$DFR_Load3_Load1)
+summary(rlm(DFR_Load3_Load1 ~ LCD_CDA_3dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$DFR_Load3_Load1)
+summary(rlm(DFR_Load3_Load1 ~ LCD_CDA_1dots, data = data_to_plot))
+
+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=LCD_CDA_5dots))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylim(c(-5,2.5))+
+  theme_classic())+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=LCD_CDA_3dots))+
+                      geom_point()+
+                      stat_smooth(method="lm")+
+                      ylim(c(-5,2.5))+
+                      theme_classic())+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=LCD_CDA_1dots))+
+                                          geom_point()+
+                                          stat_smooth(method="lm")+
+                                          ylim(c(-5,2.5))+
+                                          theme_classic()+
+                                          theme(aspect.ratio=1))
+
+# cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ LCD_CDA_5dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ LCD_CDA_3dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ LCD_CDA_1dots, data = data_to_plot))
+
 
 (ggplot(data_to_plot,aes(x=omnibus_span, y=LCD_CDA_5dots))+
     geom_point()+
     stat_smooth(method="lm")+
+    ylim(c(-5,2.5))+
     theme_classic())+(ggplot(data_to_plot,aes(x=omnibus_span, y=LCD_CDA_3dots))+
                         geom_point()+
                         stat_smooth(method="lm")+
+                        ylim(c(-5,2.5))+
                         theme_classic())+(ggplot(data_to_plot,aes(x=omnibus_span, y=LCD_CDA_1dots))+
                                             geom_point()+
                                             stat_smooth(method="lm")+
+                                            ylim(c(-5,2.5))+
                                             theme_classic()+
                                             theme(aspect.ratio=1))
 
-cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$omnibus_span)
-cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$omnibus_span)
-cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$omnibus_span)
+# cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$omnibus_span)
+summary(rlm(omnibus_span ~ LCD_CDA_5dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$omnibus_span)
+summary(rlm(omnibus_span ~ LCD_CDA_3dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$omnibus_span)
+summary(rlm(omnibus_span ~ LCD_CDA_1dots, data = data_to_plot))
 
 (ggplot(data_to_plot,aes(x=XLCD_K_MAX, y=LCD_CDA_5dots))+
     geom_point()+
     stat_smooth(method="lm")+
+    ylim(c(-5,2.5))+
     theme_classic())+(ggplot(data_to_plot,aes(x=XLCD_K_MAX, y=LCD_CDA_3dots))+
                         geom_point()+
                         stat_smooth(method="lm")+
+                        ylim(c(-5,2.5))+
                         theme_classic())+(ggplot(data_to_plot,aes(x=XLCD_K_MAX, y=LCD_CDA_1dots))+
                                             geom_point()+
                                             stat_smooth(method="lm")+
+                                            ylim(c(-5,2.5))+
                                             theme_classic()+
                                             theme(aspect.ratio=1))
 
-cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$XLCD_K_MAX)
-cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$XLCD_K_MAX)
-cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$XLCD_K_MAX)
+# cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$XLCD_K_MAX)
+summary(rlm(XLCD_K_MAX ~ LCD_CDA_5dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$XLCD_K_MAX)
+summary(rlm(XLCD_K_MAX ~ LCD_CDA_3dots, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$XLCD_K_MAX)
+summary(rlm(XLCD_K_MAX ~ LCD_CDA_1dots, data = data_to_plot))
 
 ```
 ```{r split CDA into groups}
@@ -2852,7 +3297,7 @@ summary(aov(LCD_CDA_3dots ~ level,data=CDA_anova))
 
 ## Relationship of Load Effects with Span
 
-Vogel and Machizawa (2004) had mean K = 2.8. Our average K max = 2.68 (so slightly lower). The only thing that even shows a trend with DFR fMRI load effects is in the load effect between the 3 dot and 1 dot condition.  
+Vogel and Machizawa (2004) had mean K = 2.8. Our average K max = 2.68 (so slightly lower). When we run a robust regression, we see significant relationships with DFR load effect for the 5-3 and 3-1 conditions, and for 3-1 for the L IPS load effect. 
 
 ```{r look at relationship between CDA load effects and DFR delay load effect}
 
@@ -2868,9 +3313,35 @@ Vogel and Machizawa (2004) had mean K = 2.8. Our average K max = 2.68 (so slight
                                            theme_classic()+
                                            theme(aspect.ratio=1))
 
-cor.test(data_to_plot$CDA_5_3, data_to_plot$DFR_Load3_Load1)
-cor.test(data_to_plot$CDA_5_1, data_to_plot$DFR_Load3_Load1)
-cor.test(data_to_plot$CDA_3_1, data_to_plot$DFR_Load3_Load1)
+# cor.test(data_to_plot$CDA_5_3, data_to_plot$DFR_Load3_Load1)
+# cor.test(data_to_plot$CDA_5_1, data_to_plot$DFR_Load3_Load1)
+# cor.test(data_to_plot$CDA_3_1, data_to_plot$DFR_Load3_Load1)
+
+summary(rlm(DFR_Load3_Load1 ~ CDA_3_1, data = data_to_plot))
+summary(rlm(DFR_Load3_Load1 ~ CDA_5_1, data = data_to_plot))
+summary(rlm(DFR_Load3_Load1 ~ CDA_5_3, data = data_to_plot))
+
+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=CDA_5_3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  ylim(c(-5,2.5))+
+  theme_classic())+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=CDA_5_1))+
+                      geom_point()+
+                      stat_smooth(method="lm")+
+                      ylim(c(-5,2.5))+
+                      theme_classic())+(ggplot(data_to_plot,aes(x=DFR_L_IPS, y=CDA_3_1))+
+                                          geom_point()+
+                                          stat_smooth(method="lm")+
+                                          ylim(c(-5,2.5))+
+                                          theme_classic()+
+                                          theme(aspect.ratio=1))
+
+# cor.test(data_to_plot$LCD_CDA_5dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ CDA_5_3, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_3dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ CDA_5_1, data = data_to_plot))
+# cor.test(data_to_plot$LCD_CDA_1dots, data_to_plot$DFR_L_IPS)
+summary(rlm(DFR_L_IPS ~ CDA_3_1, data = data_to_plot))
 
 (ggplot(data_to_plot,aes(x=omnibus_span, y=CDA_5_3))+
     geom_point()+
@@ -2884,9 +3355,13 @@ cor.test(data_to_plot$CDA_3_1, data_to_plot$DFR_Load3_Load1)
                                             theme_classic()+
                                             theme(aspect.ratio=1)
                         )
-cor.test(data_to_plot$CDA_5_3, data_to_plot$omnibus_span)
-cor.test(data_to_plot$CDA_5_1, data_to_plot$omnibus_span)
-cor.test(data_to_plot$CDA_3_1, data_to_plot$omnibus_span)
+# cor.test(data_to_plot$CDA_5_3, data_to_plot$omnibus_span)
+# cor.test(data_to_plot$CDA_5_1, data_to_plot$omnibus_span)
+# cor.test(data_to_plot$CDA_3_1, data_to_plot$omnibus_span)
+
+summary(rlm(omnibus_span ~ CDA_3_1, data = data_to_plot))
+summary(rlm(omnibus_span ~ CDA_5_1, data = data_to_plot))
+summary(rlm(omnibus_span ~ CDA_5_3, data = data_to_plot))
 
 mean(data_to_plot$XLCD_K_MAX,na.rm=TRUE)
 
@@ -2902,9 +3377,12 @@ mean(data_to_plot$XLCD_K_MAX,na.rm=TRUE)
                                                   stat_smooth(method="loess")+
                                                   theme_classic()) 
 
-cor.test(data_to_plot$CDA_5_3, data_to_plot$XLCD_K_MAX)
-cor.test(data_to_plot$CDA_5_1, data_to_plot$XLCD_K_MAX)
-cor.test(data_to_plot$CDA_3_1, data_to_plot$XLCD_K_MAX)
+# cor.test(data_to_plot$CDA_5_3, data_to_plot$XLCD_K_MAX)
+# cor.test(data_to_plot$CDA_5_1, data_to_plot$XLCD_K_MAX)
+# cor.test(data_to_plot$CDA_3_1, data_to_plot$XLCD_K_MAX)
+summary(rlm(XLCD_K_MAX ~ CDA_3_1, data = data_to_plot))
+summary(rlm(XLCD_K_MAX ~ CDA_5_1, data = data_to_plot))
+summary(rlm(XLCD_K_MAX ~ CDA_5_3, data = data_to_plot))
 
 
 ggplot(data_to_plot,aes(x=XLCD_K_MAX, y=omnibus_span))+
@@ -3138,4 +3616,269 @@ for (idx in seq.int(1,length(sig_linear_ERSP_fMRI))){
 }
 
 ```
+# PC data 
 
+```{r load in PC data}
+
+PC_data <- read_excel("data/Data_PCscores.xlsx")
+PC_merge <- merge(PC_data, constructs_fMRI, by="PTID")
+PC_merge <- merge(PC_merge, WM_groups[["all"]])
+EEG_acc <- read.csv("data/RDoC_Qry_DFREEG_Summary.csv")
+PC_merge <- merge(PC_merge, EEG_acc, by.x="PTID", by.y="XSUB")
+PC_merge$XDFR_EEG_ACC_LE <- PC_merge$XDFR_EEG_ACC_L3-PC_merge$XDFR_EEG_ACC_L1
+PC_merge <- merge(PC_merge, p200_data)
+PC_merge$group_label <- "NCS"
+PC_merge$group_label[PC_merge$group == 1] <- "CS"
+
+
+```
+
+We do see significant correlations with our span measure and Cowan's K and accuracy at high load, but not for the load effect. Interestingly, there's a relatively low correlation between accuracy across modalities, but that is driven by the CS group. In fact, the correlation between the tasks in the NCS group is nearly 0. [[1 = CS, 2 = NCS]]
+
+In addition, we see significant correlations between span and FAC1_RT_TaskPerf_EEGonly, FAC2_Capacity_TaskPerf_EEGOnly, Update_Alpha_FAC1, Update_P3_FAC1, storage_gamma_fac3_DFR, Alerting_SCAP_P2fixn_Fz_allloads
+
+```{r test correlations}
+
+cor.test(PC_merge$omnibus_span_no_DFR, PC_merge$XDFR_EEG_COW_L3)
+ggplot(data = PC_merge, aes(x=omnibus_span_no_DFR, y = XDFR_EEG_COW_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()
+
+cor.test(PC_merge$omnibus_span_no_DFR, PC_merge$XDFR_EEG_ACC_LE)
+ggplot(data = PC_merge, aes(x=omnibus_span_no_DFR, y = XDFR_EEG_ACC_LE))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()
+
+cor.test(PC_merge$omnibus_span_no_DFR, PC_merge$XDFR_EEG_ACC_L3)
+ggplot(data = PC_merge, aes(x=omnibus_span_no_DFR, y = XDFR_EEG_ACC_L3))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()
+
+cor.test(PC_merge$XDFR_EEG_ACC_L3, PC_merge$XDFR_MRI_ACC_L3)
+cor.test(PC_merge$XDFR_EEG_ACC_L3[PC_merge$group_label=="CS"],PC_merge$XDFR_MRI_ACC_L3[PC_merge$group_label=="CS"] )
+cor.test(PC_merge$XDFR_EEG_ACC_L3[PC_merge$group_label=="NCS"],PC_merge$XDFR_MRI_ACC_L3[PC_merge$group_label=="NCS"] )
+
+ggplot(data = PC_merge, aes(x=XDFR_MRI_ACC_L3, y = XDFR_EEG_ACC_L3, color=group_label))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()
+
+
+for (col in seq.int(11,23)){ 
+  print(colnames(PC_merge)[col])
+  print(cor.test(PC_merge$omnibus_span_no_DFR, PC_merge[,col]))
+  print(ggplot(data = PC_merge, aes_string(x="omnibus_span_no_DFR", y = colnames(PC_merge)[col]))+
+          geom_point()+
+          stat_smooth(method="lm")+
+          theme_classic())
+}
+
+```
+
+If we look at the actual interaction, it only trends towards significance. 
+
+```{r}
+
+acc_mod <- lm(XDFR_EEG_ACC_L3 ~ XDFR_MRI_ACC_L3 * group_label, data = PC_merge)
+summary(acc_mod)
+
+interact_plot(acc_mod, pred = XDFR_MRI_ACC_L3, modx =group_label)
+
+```
+```{r}
+
+PC_merge <- merge(PC_merge, p200_delay_DFR)
+
+ggplot(data = PC_merge, aes(x=DFR_Load3_Load1, y=Main_DPX_CNV_FCz_ACues))+
+  geom_point()+
+  stat_smooth(method="lm")+
+  theme_classic()
+
+summary(rlm(Main_DPX_CNV_FCz_ACues ~ DFR_Load3_Load1, data = PC_merge))
+
+```
+
+
+```{r compare span groups with EEG cap vs omnibus span}
+
+PC_ordered <- PC_data[PC_data$PTID %in% constructs_fMRI$PTID,]
+PC_ordered <- PC_ordered[order(PC_ordered$FAC2_Capacity_TaskPerf_EEGOnly),]
+
+PC_ordered$WMC <- NA
+PC_ordered$WMC[1:56] <- "low"
+PC_ordered$WMC[58:113] <- "med"
+PC_ordered$WMC[115:170] <- "high"
+PC_ordered$WMC <- factor(PC_ordered$WMC, levels = c("low", "med", "high"))
+
+EEG_WMC <- PC_ordered[,c(1,5,17)]
+
+se <- function(x) {
+  sd(x,na.rm=TRUE)/sqrt(length(x[!is.na(x)])) 
+}
+
+
+merge(EEG_WMC, p200_DFR_full_mask, by = "PTID") %>%
+  filter(!is.na(WMC)) %>%
+  group_by(WMC) %>%
+  summarise(mean_act = mean(delay_loadEffect), se_act = se(delay_loadEffect),se_min = mean_act-se_act, se_max = mean_act+se_act) %>% 
+  ggplot(aes(x=WMC, y = mean_act))+
+  geom_bar(stat="identity")+
+  geom_errorbar(aes(ymin=se_min, ymax=se_max), width=0.2)+
+  theme_classic()+
+  ylab("DFR Delay Load Effect")+
+  scale_fill_discrete()
+
+merge(EEG_WMC, p200_DFR_full_mask, by = "PTID")  %>% 
+  ggplot(aes(x=FAC2_Capacity_TaskPerf_EEGOnly, y = delay_loadEffect))+
+  geom_point(aes(color=WMC))+
+  ylab("DFR Delay Load Effect")+
+  stat_smooth(method="loess")+
+  theme_classic()
+
+merge(constructs_fMRI, p200_DFR_full_mask, by = "PTID")  %>% 
+  merge(WM_groups[["all"]], by="PTID") %>%
+  ggplot(aes(x=omnibus_span_no_DFR, y = delay_loadEffect))+
+  geom_point(aes(color=level))+
+  stat_smooth(method="loess")+
+  ylab("DFR Delay Load Effect")+
+  theme_classic()
+
+```
+```{r check change in span group between EEG capacity and omnibus span}
+
+check_span_groups <- merge(constructs_fMRI, EEG_WMC, by = "PTID")
+
+check_span_groups<- check_span_groups[order(check_span_groups$omnibus_span_no_DFR),]
+check_span_groups$omnibus <- "low"
+check_span_groups$omnibus[] <- "not_incl"
+check_span_groups$omnibus[58:113] <- "med"
+check_span_groups$omnibus[114] <- "not_incl"
+check_span_groups$omnibus[115:170] <- "high"
+
+check_span_groups<- check_span_groups[order(check_span_groups$FAC2_Capacity_TaskPerf_EEGOnly),]
+check_span_groups$EEG <- "low"
+check_span_groups$EEG[57] <- "not_incl"
+check_span_groups$EEG[58:113] <- "med"
+check_span_groups$EEG[114] <- "not_incl"
+check_span_groups$EEG[115:170] <- "high"
+
+sum(check_span_groups$omnibus != check_span_groups$EEG, na.rm=TRUE)
+
+```
+
+These are mostly linear - the only thing that shows a numerically inverted U trend is the Storage - DFR - n170 PC, but it isn't statistically significant. 
+
+```{r inverted U in EEG PCs}
+
+temp_data <-  merge(PC_ordered, WM_groups[["all"]], by = "PTID")
+temp_data$level <- factor(temp_data$level, levels = c("low", "med", "high"))
+
+plot_data <- function(var){ 
+  
+  temp_data %>% 
+    filter(!is.na(WMC)) %>% 
+    group_by(WMC) %>% 
+    summarise(variable = mean({{var}}, na.rm=TRUE), se_act = se({{var}}),se_min = variable-se_act, se_max = variable+se_act) %>%
+    ggplot(aes(x=WMC, y = variable))+
+    geom_bar(stat="identity")+
+    geom_errorbar(aes(ymin=se_min, ymax=se_max), width=0.2)+
+    ggtitle("EEG Capacity")+
+    theme_classic()+
+    scale_fill_discrete() -> EEG_plot
+  
+  temp_data %>% 
+    filter(!is.na(level)) %>% 
+    group_by(level) %>% 
+    summarise(variable = mean({{var}}, na.rm=TRUE), se_act = se({{var}}),se_min = variable-se_act, se_max = variable+se_act) %>%
+    ggplot(aes(x=level, y = variable))+
+    geom_bar(stat="identity")+
+    geom_errorbar(aes(ymin=se_min, ymax=se_max), width=0.2)+
+    ggtitle("Omnibus Capacity")+
+    theme_classic()+
+    scale_fill_discrete() -> omnibus_plot
+  
+  groups_plot <- omnibus_plot + EEG_plot 
+  
+  return(groups_plot)
+  
+}
+
+plot_data(FAC1_RT_TaskPerf_EEGonly) + plot_annotation(title="FAC1_RT_TaskPerf_EEGonly")
+plot_data(Update_Alpha_FAC1) + plot_annotation(title="Update_Alpha_FAC1")
+plot_data(Update_P3_FAC1) + plot_annotation(title="Update_P3_FAC1")
+plot_data(Storage_gamma_FAC3_DFR) + plot_annotation(title="Storage_gamma_FAC3_DFR")
+plot_data(Storage_LCD_CDA) + plot_annotation(title="Storage_LCD_CDA")
+plot_data(Storage_DFR_n170) + plot_annotation(title="Storage_DFR_n170")
+plot_data(Main_DPX_CNV_FCz_ACues) + plot_annotation(title="Main_DPX_CNV_FCz_ACues")
+plot_data(Alerting_SCAP_P2fixn_Fz_allloads) + plot_annotation(title="Alerting_SCAP_P2fixn_Fz_allloads")
+plot_data(LTM_theta_FAC1) + plot_annotation(title="LTM_theta_FAC1")
+
+summary(aov(Storage_DFR_n170~level, data = temp_data))
+
+```
+
+When we remove boundary cases, we still see 46 subjects changing groups. The patterns match much better. 
+
+```{r look at PCs when boundary cases removed}
+
+temp_data <- merge(constructs_fMRI, PC_ordered, by = "PTID")
+temp_data <- merge(temp_data, p200_delay_avgs, by = "PTID")
+temp_data <- temp_data[order(temp_data$omnibus_span_no_DFR),]
+temp_data$level <- "low" 
+temp_data$level[c(52:67,120:135)] <- NA
+temp_data$level[68:119] <- "med"
+temp_data$level[136:170] <- "high"
+temp_data <- temp_data[order(temp_data$FAC2_Capacity_TaskPerf_EEGOnly),]
+temp_data$WMC[c(52:67,120:135)] <- NA
+
+temp_data$level <- factor(temp_data$level, levels = c("low", "med", "high"))
+
+sum(temp_data$level != temp_data$WMC, na.rm=TRUE)
+
+
+plot_data <- function(var){ 
+  
+  temp_data %>% 
+    filter(!is.na(WMC)) %>% 
+    group_by(WMC) %>% 
+    summarise(variable = mean({{var}}, na.rm=TRUE), se_act = se({{var}}),se_min = variable-se_act, se_max = variable+se_act) %>%
+    ggplot(aes(x=WMC, y = variable))+
+    geom_bar(stat="identity")+
+    geom_errorbar(aes(ymin=se_min, ymax=se_max), width=0.2)+
+    ggtitle("EEG Capacity")+
+    theme_classic()+
+    scale_fill_discrete() -> EEG_plot
+  
+  temp_data %>% 
+    filter(!is.na(level)) %>% 
+    group_by(level) %>% 
+    summarise(variable = mean({{var}}, na.rm=TRUE), se_act = se({{var}}),se_min = variable-se_act, se_max = variable+se_act) %>%
+    ggplot(aes(x=level, y = variable))+
+    geom_bar(stat="identity")+
+    geom_errorbar(aes(ymin=se_min, ymax=se_max), width=0.2)+
+    ggtitle("Omnibus Capacity")+
+    theme_classic()+
+    scale_fill_discrete() -> omnibus_plot
+  
+  groups_plot <- omnibus_plot + EEG_plot 
+  
+  return(groups_plot)
+  
+}
+
+plot_data(DFR) + plot_annotation(title = "DFR Delay activity")
+plot_data(FAC1_RT_TaskPerf_EEGonly) + plot_annotation(title="FAC1_RT_TaskPerf_EEGonly")
+plot_data(Update_Alpha_FAC1) + plot_annotation(title="Update_Alpha_FAC1")
+plot_data(Update_P3_FAC1) + plot_annotation(title="Update_P3_FAC1")
+plot_data(Storage_gamma_FAC3_DFR) + plot_annotation(title="Storage_gamma_FAC3_DFR")
+plot_data(Storage_LCD_CDA) + plot_annotation(title="Storage_LCD_CDA")
+plot_data(Storage_DFR_n170) + plot_annotation(title="Storage_DFR_n170")
+plot_data(Main_DPX_CNV_FCz_ACues) + plot_annotation(title="Main_DPX_CNV_FCz_ACues")
+plot_data(Alerting_SCAP_P2fixn_Fz_allloads) + plot_annotation(title="Alerting_SCAP_P2fixn_Fz_allloads")
+plot_data(LTM_theta_FAC1) + plot_annotation(title="LTM_theta_FAC1")
+
+
+```
