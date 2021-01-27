@@ -1,0 +1,676 @@
+---
+title: "Anna Karenina Analysis"
+author: "Catherine Walsh"
+date: "1/26/2021"
+output:
+  html_document:
+    toc: true 
+    toc_float: true 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This analysis is based on the intersubject RSA analysis from Finn et al (2020). In this paper, they test the notion that there are two possible patterns of ways that subjects could be related based on working memory capacity - a nearest neighbors approach, where subjects that have similar working memory capacity will show similar patterns of brain activity, or what they term an "Anna Karenina" (AnnaK) pattern. In this relationship, subjects that have high capacity look more similar than subjects with low capacity (playing on the notion from the novel that all happy families are alike in the same way, while all unhappy families have their unique kind of unhappiness).  
+
+In this analysis, we will apply this approach to beta series connectivity from each task period, resting state connectivity and task based RSA from each task period. 
+
+```{r load libraries and data} 
+
+library(tidyverse)
+library(reticulate)
+library(patchwork)
+library(rmatio)
+
+#behavioral data
+load('data/behav.RData')
+
+# beta series condition order
+beta_series_cond_order <- read.mat("data/BetaSeries/condition_order.mat")
+
+```
+
+
+# Load in and create similarity maps 
+
+## Behavioral 
+
+```{r calculate behavioral sim matrices}
+
+NN_sim <- data.frame(matrix(nrow=169,ncol=169))
+AK_sim <- data.frame(matrix(nrow=169,ncol=169))
+# need to remove subject 1024
+behav <- constructs_fMRI$omnibus_span_no_DFR[c(1:10,12:170)]
+
+for (sub1 in seq.int(1,169)){
+  for (sub2 in seq.int(1,169)){
+    NN_sim[sub1,sub2] <- 1/(1+sqrt(sum((behav[sub1] - behav[sub2]) ^ 2)))
+    AK_sim[sub1,sub2] <- (behav[sub1] + behav[sub2])/2
+  }
+}
+
+```
+
+These plots are just based on WM capacity, just to visualize what each of these patterns of relationships look like.
+
+```{r plot behav heatmaps}
+
+WM_order <- order(behav)
+
+ordered_NN_sim <- NN_sim[WM_order, WM_order]
+ordered_AK_sim <- AK_sim[WM_order, WM_order]
+colnames(ordered_NN_sim) <- paste("X",c(1:169),sep="")
+colnames(ordered_AK_sim) <- paste("X",c(1:169),sep="")
+
+ordered_NN_sim %>%
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  mutate(Y=as.numeric(gsub("X","",Y))) %>%
+  ggplot()+
+  geom_tile(aes(x=X,y=Y, fill=Z))+
+  theme_classic()+
+  theme(aspect.ratio=1, 
+        axis.line=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())+
+  labs(x="Subject", y="Subject", title = "Nearest Neighbor (NN) Similarity", fill="Similarity")
+
+ordered_AK_sim %>%
+  as_tibble() %>%
+  rowid_to_column(var="X") %>%
+  gather(key="Y", value="Z", -1) %>%
+  mutate(Y=as.numeric(gsub("X","",Y))) %>%
+  ggplot()+
+  geom_tile(aes(x=X,y=Y, fill=Z))+
+  theme_classic()+
+  theme(aspect.ratio=1, 
+        axis.line=element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())+
+  labs(x="Subject", y="Subject", title = "AnnaK (AK) Similarity", fill="Similarity")
+
+```
+
+## Beta Series 
+
+In the calculation of this measure, we extracted beta series connectivity measures from the frontoparietal control and default mode networks as defined in the Schaefer et al (2011) atlas, in addition to individually defined bilateral anterior, medial and posterior hippocampus and bilateral FFA. 
+
+Here, we calculate the second order correlations of the entire beta series connectivity matrix of each subject to every other subjects. This is the code that ran to calculate these correlations for each condition, but takes a while to run, so for the HTML export, it doesn't run and a saved version is loaded. 
+
+```{r calculate similarity at each time period, eval=FALSE} 
+
+sim_list <- list()
+
+for (cond in seq.int(7,12)){
+  temp <- data.frame(matrix(nrow=169,ncol=169))
+  
+  for (sub1 in seq.int(1,169)){
+    for (sub2 in seq.int(1,169)){
+      
+      if (sub1 != 55 && sub2 != 55){
+        temp1 <- as.vector(suj_by_cond[[sub1]][[cond]])
+        temp1[temp1 == "Inf"] <- NA
+        temp2 <- as.vector(suj_by_cond[[sub2]][[cond]])
+        temp2[temp2 == "Inf"] <- NA
+        
+        temp[sub1,sub2] <- cor(temp1,temp2, use="pairwise.complete.obs")
+      }
+    }
+  }
+  sim_list[[cond-6]] <- temp
+  print(paste("finished cond:",cond))
+}
+
+#save(list = "sim_list", file = "data/BetaSeries/intersub_corr_beta_series.RData")
+```
+
+```{r load intersubject correlations for beta series, include=FALSE}
+
+load("data/BetaSeries/intersub_corr_beta_series.RData")
+
+```
+
+```{r plot fMRI similarity data}
+
+condition_list_BS  <- c("Cue - High Load", "Delay - High Load", "Probe - High Load","Cue - Low Load", "Delay - Low Load", "Probe - Low Load" )
+
+for (cond in seq.int(1,6)){
+  sim_list[[cond]] %>%
+    as_tibble() %>%
+    rowid_to_column(var="X") %>%
+    gather(key="Y", value="Z", -1) %>%
+    mutate(Y=as.numeric(gsub("X","",Y))) %>%
+    ggplot()+
+    geom_tile(aes(x=X,y=Y, fill=Z))+
+    theme_classic()+
+    theme(aspect.ratio=1, 
+          axis.line=element_blank(),
+          axis.ticks = element_blank(),
+          axis.text = element_blank())+
+    scale_fill_gradient(limits = c(-0.25,1))+
+    labs(x="Subject", y="Subject", title = paste("Condition:",condition_list_BS[cond]), fill="Similarity") -> temp_plot
+  print(temp_plot)
+}
+
+```
+
+## Rest
+
+This data is extracted from the same regions as the beta series connectivity analysis during the resting state fMRI. 
+
+```{python get rest data}
+
+import numpy as np 
+
+rest_data = np.load("data/BetaSeries/cross_sub_reduced_yeo_with_indiv_RS_corr.npy")
+
+```
+
+```{r get rest data from python}
+
+rest_data <- py$rest_data
+# had to additionally remove subject 1554 from rest data, so deal with that
+rest_data_mat <- data.frame(matrix(nrow=169,ncol=169))
+rest_data_mat[1:71,1:71] <- rest_data[1:71,1:71]
+rest_data_mat[73:169,1:71] <- rest_data[72:168, 1:71]
+rest_data_mat[1:71,73:169] <- rest_data[1:71, 72:168]
+rest_data_mat[73:169, 73:169] <- rest_data[72:168, 72:168]
+# need to take atanh of matrix to do stats so make the NAs 1; will filter out Inf later
+rest_data_mat[1:72,72] <- 1
+rest_data_mat[72,1:72] <- 1
+
+rest_data <- atanh(rest_data_mat)
+```
+
+## Task RSA 
+
+This analysis looks at the inter-subject correlation in two different ROIs: a bilateral fusiform ROI from the AAL atlas, and a mask of all regions that showed high load > low load activation during the delay period of the DFR task. 
+
+In order to get this data, we extracted the model-free BOLD activity and applied minimal pre-processing using SPM8 (removing cosine, filtering, detrend and meaning the value across voxels). From there, we separated the data into trials. Because the data was jittered, decided that the onset of a trial should be considered the TR that contains the onset of the trial. Once we had the individual trials separated, we averaged over high and low load trials separately. Correlations were taken across all common voxels in the given mask for each pair of subjects for the high load trials, which is the data that we are showing below. 
+
+```{r load task RSA}
+
+corr_temp <- read.mat("data/ISC_corr.mat")
+suj_corr_fusiform <- corr_temp[["suj_corr"]]
+corr_temp <- read.mat("data/ISC_corr_DFR_delay.mat")
+suj_corr_DFR <- corr_temp[["suj_corr"]]
+
+suj_corr_fusiform[is.nan(suj_corr_fusiform)] <- NA
+suj_corr_DFR[is.nan(suj_corr_DFR)] <- NA
+
+```
+
+### Fusiform
+
+```{r create averages for encoding, delay and probe - fusiform}
+
+sim_list_fusiform <- list()
+
+sim_list_fusiform[["encoding"]] <- suj_corr_fusiform[,,6]
+sim_list_fusiform[["delay"]] <- suj_corr_fusiform[,,8]
+sim_list_fusiform[["probe"]] <- suj_corr_fusiform[,,11]
+
+```
+
+```{r plot average similarity - fusiform}
+
+condition_list  <- c("Cue", "Delay", "Probe")
+
+for (cond in seq.int(1,3)){
+  sim_list_fusiform[[cond]] %>%
+    as_tibble() %>%
+    rowid_to_column(var="X") %>%
+    gather(key="Y", value="Z", -1) %>%
+    mutate(Y=as.numeric(gsub("V","",Y))) %>%
+    ggplot()+
+    geom_tile(aes(x=X,y=Y, fill=Z))+
+    theme_classic()+
+    theme(aspect.ratio=1, 
+          axis.line=element_blank(),
+          axis.ticks = element_blank(),
+          axis.text = element_blank())+
+    scale_fill_gradient(limits = c(-0.25,1))+
+    labs(x="Subject", y="Subject", title = paste("Condition:",condition_list[cond]), fill="Similarity") -> temp_plot
+  print(temp_plot)
+}
+
+```
+
+### DFR 
+
+```{r create averages for encoding, delay and probe - DFR}
+
+sim_list_DFR <- list()
+
+sim_list_DFR[["encoding"]] <- suj_corr_DFR[,,6]
+sim_list_DFR[["delay"]] <- suj_corr_DFR[,,8]
+sim_list_DFR[["probe"]] <- suj_corr_DFR[,,11]
+
+```
+
+```{r plot average similarity - DFR}
+condition_list  <- c("Cue", "Delay", "Probe")
+
+for (cond in seq.int(1,3)){
+  sim_list_DFR[[cond]] %>%
+    as_tibble() %>%
+    rowid_to_column(var="X") %>%
+    gather(key="Y", value="Z", -1) %>%
+    mutate(Y=as.numeric(gsub("V","",Y))) %>%
+    ggplot()+
+    geom_tile(aes(x=X,y=Y, fill=Z))+
+    theme_classic()+
+    theme(aspect.ratio=1, 
+          axis.line=element_blank(),
+          axis.ticks = element_blank(),
+          axis.text = element_blank())+
+    scale_fill_gradient(limits = c(-0.25,1))+
+    labs(x="Subject", y="Subject", title = paste("Condition:",condition_list[cond]), fill="Similarity") -> temp_plot
+  print(temp_plot)
+}
+
+```
+
+# Compare fMRI similarity to Behavioral 
+
+In the following analyses, we use Spearman rank correlation to relate the brain data to the behavioral data. We test the significance of the data using permutation tests (essentially a Mantel test using 10,000 random permutations of the behavioral data). On the graphs, we plot the distribution of the randomly permuted Spearman correlations, with the 90th, 95th and 99th percentile of the permuted distribution marked with the dotted lines and the observed correlation marked in red. Additionally, we calculate the p-value of the observed correlation from the permuted distribution. 
+
+## Beta Series 
+
+```{r calculate similarities for beta series}
+
+NN_results_list <- data.frame(matrix(nrow=6,ncol=3))
+AK_results_list <- data.frame(matrix(nrow=6,ncol=3))
+
+rownames(NN_results_list) <- unlist(beta_series_cond_order)[7:12]
+rownames(AK_results_list) <- unlist(beta_series_cond_order)[7:12]
+
+colnames(NN_results_list) <- c("corr","p_val","mantel")
+colnames(AK_results_list) <- c("corr","p_val","mantel")
+
+upper_triangle_NN <- NN_sim[upper.tri(NN_sim)]
+upper_triangle_AK <- AK_sim[upper.tri(AK_sim)]
+
+for (cond in seq.int(1,6)){
+  temp_AK <- cor.test(upper_triangle_AK, sim_list[[cond]][upper.tri(sim_list[[cond]])], method="spearman")
+  temp_NN <- cor.test(upper_triangle_NN, sim_list[[cond]][upper.tri(sim_list[[cond]])], method="spearman")
+  NN_results_list$corr[cond] <- temp_NN$estimate
+  NN_results_list$p_val[cond] <- temp_NN$p.value
+  AK_results_list$corr[cond] <- temp_AK$estimate
+  AK_results_list$p_val[cond] <- temp_AK$p.value
+}
+
+
+```
+
+```{r mantel tests for beta series}
+
+AK_perm <- data.frame(matrix(nrow=10000,ncol=6))
+NN_perm <- data.frame(matrix(nrow=10000,ncol=6))
+
+for (cond in seq.int(1,6)){
+  for (perm_idx in seq.int(1,10000)){
+    #shuffle behav data
+    shuff = sample(1:169,169)
+    shuff_AK <- AK_sim[shuff,shuff]
+    shuff_NN <- NN_sim[shuff,shuff]
+    AK_perm[perm_idx, cond] <- cor(sim_list[[cond]][upper.tri(sim_list[[cond]])], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+    NN_perm[perm_idx, cond] <- cor(sim_list[[cond]][upper.tri(sim_list[[cond]])], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+  }
+  print(paste("finished cond:",cond))
+  
+}
+
+NN_plot_data <-data.frame(matrix(nrow=6,ncol=4))
+AK_plot_data <-data.frame(matrix(nrow=6,ncol=4))
+colnames(NN_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+colnames(AK_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+
+NN_plot_data$corr <- NN_results_list$corr
+AK_plot_data$corr <- AK_results_list$corr
+
+for (cond in seq.int(1,6)){
+  NN_plot_data$pctl_90[cond] <- quantile(NN_perm[,cond],0.9, na.rm=TRUE)
+  NN_plot_data$pctl_95[cond] <- quantile(NN_perm[,cond],0.95, na.rm=TRUE)
+  NN_plot_data$pctl_99[cond] <- quantile(NN_perm[,cond],0.99, na.rm=TRUE)
+  
+  AK_plot_data$pctl_90[cond] <- quantile(AK_perm[,cond],0.9, na.rm=TRUE)
+  AK_plot_data$pctl_95[cond] <- quantile(AK_perm[,cond],0.95, na.rm=TRUE)
+  AK_plot_data$pctl_99[cond] <- quantile(AK_perm[,cond],0.99, na.rm=TRUE)
+  
+  # get p values from permutation distribution
+  AK_results_list$mantel[cond] <- 1-ecdf(AK_perm[,cond])(AK_results_list$corr[cond])
+  NN_results_list$mantel[cond] <- 1-ecdf(NN_perm[,cond])(NN_results_list$corr[cond])
+  
+}
+
+```
+
+In the beta series data, we see that both models fit during the cue at high load, but the AnnaK model fits better (shows a stronger correlation) than the nearest neighbor model. During the delay, the Anna K model almost hits p < 0.05 (actual value p = ), while the nearest neighbor doesn't fit at all. During probe, neither of the models show p < 0.1, though the Anna K model shows a stronger effect size. 
+
+At low load, none of the correlations are less than p < 0.1. The Anna K model during cue is the only condition that even comes remotely close. 
+
+```{r plot permutation test data}
+
+for (cond in seq.int(1,6)){
+  ggplot()+
+    geom_histogram(data = NN_perm,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = NN_plot_data %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = NN_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+    theme_classic() -> NN_plot
+  
+  ggplot()+
+    geom_histogram(data = AK_perm,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = AK_plot_data %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = AK_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+    theme_classic() -> AK_plot
+  print(NN_plot + AK_plot+
+          plot_annotation(title = paste("Condition:",condition_list_BS[cond])))
+  
+}
+
+```
+
+## Rest 
+
+```{r calculate similarities for rest}
+
+rest_results_list <- data.frame(matrix(nrow=2,ncol=3))
+rest_data[rest_data == "Inf"] <- NA
+upper_triangle_rest <- rest_data[upper.tri(rest_data)]
+
+rest_perm <- data.frame(matrix(nrow=10000, ncol=2))
+colnames(rest_perm) <-  c("NN","AK")
+
+rownames(rest_results_list) <- c("NN","AK")
+
+colnames(rest_results_list) <- c("corr","p_val", "mantel")
+
+temp_rest_AK <- cor.test(upper_triangle_AK, upper_triangle_rest, method="spearman")
+temp_rest_NN <- cor.test(upper_triangle_NN, upper_triangle_rest, method="spearman")
+rest_results_list$corr[1] <- temp_rest_NN$estimate
+rest_results_list$p_val[1] <- temp_rest_NN$p.value
+rest_results_list$corr[2] <- temp_rest_AK$estimate
+rest_results_list$p_val[2] <- temp_rest_AK$p.value
+
+for (perm_idx in seq.int(1,10000)){
+  #shuffle behav data
+  shuff = sample(1:169,169)
+  shuff_AK <- AK_sim[shuff,shuff]
+  shuff_NN <- NN_sim[shuff,shuff]
+  rest_perm$AK[perm_idx] <- cor(rest_data[upper.tri(rest_data)], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+  rest_perm$NN[perm_idx] <- cor(rest_data[upper.tri(rest_data)], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+}
+
+rest_plot_data <-data.frame(matrix(nrow=2,ncol=4))
+colnames(rest_plot_data) <- c("corr","pctl_90", "pctl_95","pctl_99")
+rownames(rest_plot_data) <- c("NN","AK")
+
+rest_plot_data$corr <- rest_results_list$corr
+rest_plot_data$pctl_90[1] <- quantile(rest_perm$NN,0.1,na.rm=TRUE)
+rest_plot_data$pctl_95[1] <- quantile(rest_perm$NN,0.05,na.rm=TRUE)
+rest_plot_data$pctl_99[1] <- quantile(rest_perm$NN,0.01,na.rm=TRUE)
+rest_plot_data$pctl_90[2] <- quantile(rest_perm$AK,0.9,na.rm=TRUE)
+rest_plot_data$pctl_95[2] <- quantile(rest_perm$AK,0.95,na.rm=TRUE)
+rest_plot_data$pctl_99[2] <- quantile(rest_perm$AK,0.99,na.rm=TRUE)
+
+# get p value from distribution
+rest_results_list$mantel[1] <- ecdf(rest_perm$NN)(rest_plot_data$corr[1])
+rest_results_list$mantel[2] <- ecdf(rest_perm$AK)(rest_plot_data$corr[2])
+
+
+```
+
+At rest, we don't see any strong conformation to either model, though there is a stronger correlation with the Anna K model than the nearest neighbor model.
+
+```{r plot rest permutation data}
+
+ggplot()+
+  geom_histogram(data = rest_perm,aes(x=NN))+
+  geom_vline(data = rest_plot_data %>% select(corr) %>% filter(row_number()==1), aes(xintercept=corr), color="red")+
+  geom_vline(data = rest_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==1) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+             aes(xintercept = pctls),linetype="dotted")+
+  labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+  theme_classic() -> NN_rest_plot
+
+ggplot()+
+  geom_histogram(data = rest_perm,aes(x=AK))+
+  geom_vline(data = rest_plot_data %>% select(corr) %>% filter(row_number()==2), aes(xintercept=corr), color="red")+
+  geom_vline(data = rest_plot_data %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==2) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+             aes(xintercept = pctls),linetype="dotted")+
+  labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+  theme_classic() -> AK_rest_plot
+NN_rest_plot + AK_rest_plot+
+  plot_annotation(title = "Resting State")
+
+```
+
+## Task RSA 
+
+For task based RSA, we now have 170 subjects because we can include 1024. 
+
+```{r calculate behavioral sim matrices for task, include = FALSE}
+
+NN_sim <- data.frame(matrix(nrow=170,ncol=170))
+AK_sim <- data.frame(matrix(nrow=170,ncol=170))
+behav <- constructs_fMRI$omnibus_span_no_DFR
+
+for (sub1 in seq.int(1,170)){
+  for (sub2 in seq.int(1,170)){
+    NN_sim[sub1,sub2] <- 1/(1+sqrt(sum((behav[sub1] - behav[sub2]) ^ 2)))
+    AK_sim[sub1,sub2] <- (behav[sub1] + behav[sub2])/2
+  }
+}
+
+```
+
+### Fusiform
+
+```{r calculate similarities for fusiform}
+
+condition_list <- c("Cue", "Delay", "Probe")
+
+NN_results_list_fusiform <- data.frame(matrix(nrow=3,ncol=3))
+AK_results_list_fusiform <- data.frame(matrix(nrow=3,ncol=3))
+
+rownames(NN_results_list_fusiform) <- condition_list
+rownames(AK_results_list_fusiform) <- condition_list
+
+colnames(NN_results_list_fusiform) <- c("corr","p_val","mantel")
+colnames(AK_results_list_fusiform) <- c("corr","p_val","mantel")
+
+upper_triangle_NN <- NN_sim[upper.tri(NN_sim)]
+upper_triangle_AK <- AK_sim[upper.tri(AK_sim)]
+
+for (cond in seq.int(1,3)){
+  temp_AK <- cor.test(upper_triangle_AK, sim_list_fusiform[[cond]][upper.tri(sim_list_fusiform[[cond]])], method="spearman")
+  temp_NN <- cor.test(upper_triangle_NN, sim_list_fusiform[[cond]][upper.tri(sim_list_fusiform[[cond]])], method="spearman")
+  NN_results_list_fusiform$corr[cond] <- temp_NN$estimate
+  NN_results_list_fusiform$p_val[cond] <- temp_NN$p.value
+  AK_results_list_fusiform$corr[cond] <- temp_AK$estimate
+  AK_results_list_fusiform$p_val[cond] <- temp_AK$p.value
+}
+
+
+```
+
+```{r mantel tests for fusiform}
+
+AK_perm_fusiform <- data.frame(matrix(nrow=10000,ncol=3))
+NN_perm_fusiform <- data.frame(matrix(nrow=10000,ncol=3))
+
+for (cond in seq.int(1,3)){
+  for (perm_idx in seq.int(1,10000)){
+    #shuffle behav data
+    shuff = sample(1:170,170)
+    shuff_AK <- AK_sim[shuff,shuff]
+    shuff_NN <- NN_sim[shuff,shuff]
+    AK_perm_fusiform[perm_idx, cond] <- cor(sim_list_fusiform[[cond]][upper.tri(sim_list_fusiform[[cond]])], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+    NN_perm_fusiform[perm_idx, cond] <- cor(sim_list_fusiform[[cond]][upper.tri(sim_list_fusiform[[cond]])], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+  }
+  print(paste("finished cond:",cond))
+  
+}
+
+NN_plot_data_fusiform <-data.frame(matrix(nrow=3,ncol=4))
+AK_plot_data_fusiform <-data.frame(matrix(nrow=3,ncol=4))
+colnames(NN_plot_data_fusiform) <- c("corr","pctl_90", "pctl_95","pctl_99")
+colnames(AK_plot_data_fusiform) <- c("corr","pctl_90", "pctl_95","pctl_99")
+
+NN_plot_data_fusiform$corr <- NN_results_list_fusiform$corr
+AK_plot_data_fusiform$corr <- AK_results_list_fusiform$corr
+
+for (cond in seq.int(1,3)){
+  NN_plot_data_fusiform$pctl_90[cond] <- quantile(NN_perm_fusiform[,cond],0.9, na.rm=TRUE)
+  NN_plot_data_fusiform$pctl_95[cond] <- quantile(NN_perm_fusiform[,cond],0.95, na.rm=TRUE)
+  NN_plot_data_fusiform$pctl_99[cond] <- quantile(NN_perm[,cond],0.99, na.rm=TRUE)
+  
+  AK_plot_data_fusiform$pctl_90[cond] <- quantile(AK_perm_fusiform[,cond],0.9, na.rm=TRUE)
+  AK_plot_data_fusiform$pctl_95[cond] <- quantile(AK_perm_fusiform[,cond],0.95, na.rm=TRUE)
+  AK_plot_data_fusiform$pctl_99[cond] <- quantile(AK_perm_fusiform[,cond],0.99, na.rm=TRUE)
+  
+  # get p values from permutation distribution
+  AK_results_list_fusiform$mantel[cond] <- 1-ecdf(AK_perm_fusiform[,cond])(AK_results_list_fusiform$corr[cond])
+  NN_results_list_fusiform$mantel[cond] <- 1-ecdf(NN_perm_fusiform[,cond])(NN_results_list_fusiform$corr[cond])
+  
+}
+
+# look at lower tail for cue 
+NN_plot_data_fusiform$pctl_90[1] <- quantile(NN_perm_fusiform[,1],0.1, na.rm=TRUE)
+NN_plot_data_fusiform$pctl_95[1] <- quantile(NN_perm_fusiform[,1],0.05, na.rm=TRUE)
+NN_plot_data_fusiform$pctl_99[1] <- quantile(NN_perm[,1],0.01, na.rm=TRUE)
+
+```
+
+If we look at the fusiform ROI, the only thing that trends towards significance is the nearest neighbor model in the probe period, where the observed correlation shows p < 0.1. The cue period shows a similar trend, but with a negative correlation. 
+
+```{r plot permutation test data - fusiform}
+
+
+for (cond in seq.int(1,3)){
+  ggplot()+
+    geom_histogram(data = NN_perm_fusiform,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = NN_plot_data_fusiform %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = NN_plot_data_fusiform %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+    theme_classic() -> NN_plot_fusiform
+  
+  ggplot()+
+    geom_histogram(data = AK_perm_fusiform,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = AK_plot_data_fusiform %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = AK_plot_data_fusiform %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+    theme_classic() -> AK_plot_fusiform
+  print(NN_plot_fusiform + AK_plot_fusiform+
+          plot_annotation(title = paste("Condition:",condition_list[cond])))
+  
+}
+
+```
+
+### DFR 
+
+```{r calculate similarities for DFR}
+
+NN_results_list_DFR <- data.frame(matrix(nrow=3,ncol=3))
+AK_results_list_DFR <- data.frame(matrix(nrow=3,ncol=3))
+
+rownames(NN_results_list_DFR) <- condition_list
+rownames(AK_results_list_DFR) <- condition_list
+
+colnames(NN_results_list_DFR) <- c("corr","p_val","mantel")
+colnames(AK_results_list_DFR) <- c("corr","p_val","mantel")
+
+for (cond in seq.int(1,3)){
+  temp_AK <- cor.test(upper_triangle_AK, sim_list_DFR[[cond]][upper.tri(sim_list_DFR[[cond]])], method="spearman")
+  temp_NN <- cor.test(upper_triangle_NN, sim_list_DFR[[cond]][upper.tri(sim_list_DFR[[cond]])], method="spearman")
+  NN_results_list_DFR$corr[cond] <- temp_NN$estimate
+  NN_results_list_DFR$p_val[cond] <- temp_NN$p.value
+  AK_results_list_DFR$corr[cond] <- temp_AK$estimate
+  AK_results_list_DFR$p_val[cond] <- temp_AK$p.value
+}
+
+
+```
+
+```{r mantel tests for DFR}
+
+AK_perm_DFR <- data.frame(matrix(nrow=10000,ncol=3))
+NN_perm_DFR <- data.frame(matrix(nrow=10000,ncol=3))
+
+for (cond in seq.int(1,3)){
+  for (perm_idx in seq.int(1,10000)){
+    #shuffle behav data
+    shuff = sample(1:170,170)
+    shuff_AK <- AK_sim[shuff,shuff]
+    shuff_NN <- NN_sim[shuff,shuff]
+    AK_perm_DFR[perm_idx, cond] <- cor(sim_list_DFR[[cond]][upper.tri(sim_list_DFR[[cond]])], shuff_AK[upper.tri(shuff_AK)], method="spearman", use="pairwise.complete.obs")
+    NN_perm_DFR[perm_idx, cond] <- cor(sim_list_DFR[[cond]][upper.tri(sim_list_DFR[[cond]])], shuff_NN[upper.tri(shuff_NN)], method="spearman", use="pairwise.complete.obs")
+  }
+  print(paste("finished cond:",cond))
+  
+}
+
+NN_plot_data_DFR <-data.frame(matrix(nrow=3,ncol=4))
+AK_plot_data_DFR <-data.frame(matrix(nrow=3,ncol=4))
+colnames(NN_plot_data_DFR) <- c("corr","pctl_90", "pctl_95","pctl_99")
+colnames(AK_plot_data_DFR) <- c("corr","pctl_90", "pctl_95","pctl_99")
+
+NN_plot_data_DFR$corr <- NN_results_list_DFR$corr
+AK_plot_data_DFR$corr <- AK_results_list_DFR$corr
+
+for (cond in seq.int(1,3)){
+  NN_plot_data_DFR$pctl_90[cond] <- quantile(NN_perm_DFR[,cond],0.9, na.rm=TRUE)
+  NN_plot_data_DFR$pctl_95[cond] <- quantile(NN_perm_DFR[,cond],0.95, na.rm=TRUE)
+  NN_plot_data_DFR$pctl_99[cond] <- quantile(NN_perm_DFR[,cond],0.99, na.rm=TRUE)
+  
+  AK_plot_data_DFR$pctl_90[cond] <- quantile(AK_perm_DFR[,cond],0.9, na.rm=TRUE)
+  AK_plot_data_DFR$pctl_95[cond] <- quantile(AK_perm_DFR[,cond],0.95, na.rm=TRUE)
+  AK_plot_data_DFR$pctl_99[cond] <- quantile(AK_perm_DFR[,cond],0.99, na.rm=TRUE)
+  
+  # get p values from permutation distribution
+  AK_results_list_DFR$mantel[cond] <- 1-ecdf(AK_perm_DFR[,cond])(AK_results_list_DFR$corr[cond])
+  NN_results_list_DFR$mantel[cond] <- 1-ecdf(NN_perm_DFR[,cond])(NN_results_list_DFR$corr[cond])
+  
+}
+#look at lower tail for delay
+NN_plot_data_DFR$pctl_90[2] <- quantile(NN_perm_DFR[,cond],0.1, na.rm=TRUE)
+NN_plot_data_DFR$pctl_95[2] <- quantile(NN_perm_DFR[,cond],0.05, na.rm=TRUE)
+NN_plot_data_DFR$pctl_99[2] <- quantile(NN_perm_DFR[,cond],0.01, na.rm=TRUE)
+
+```
+
+Looking at the DFR regions, we see that there is a trend (p = 0.055) for the relationship in the probe with the Anna K model. 
+
+```{r plot permutation test data - DFR}
+
+for (cond in seq.int(1,3)){
+  ggplot()+
+    geom_histogram(data = NN_perm_DFR,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = NN_plot_data_DFR %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = NN_plot_data_DFR %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity",y="Frequency", title="Nearest Neighbor (NN) Similarity")+
+    theme_classic() -> NN_plot_DFR
+  
+  ggplot()+
+    geom_histogram(data = AK_perm_DFR,aes_string(x=paste("X",cond,sep="")))+
+    geom_vline(data = AK_plot_data_DFR %>% select(corr) %>% filter(row_number()==cond), aes(xintercept=corr), color="red")+
+    geom_vline(data = AK_plot_data_DFR %>% select(pctl_90, pctl_95,pctl_99) %>% filter(row_number()==cond) %>% t() %>% as.data.frame() %>% select(pctls = 1), 
+               aes(xintercept = pctls),linetype="dotted")+
+    labs(x="Similarity", y="Frequency", title="Anna K (AK) Similarity")+
+    theme_classic() -> AK_plot_DFR
+  print(NN_plot_DFR + AK_plot_DFR+
+          plot_annotation(title = paste("DFR Condition:",condition_list[cond])))
+  
+}
+
+```

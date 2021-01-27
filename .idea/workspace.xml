@@ -2,29 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="f8f92241-3fd1-409c-96e6-ec10ad861156" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/BAMM_scratch_workbook.Rmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/HPC_timecourses.Rmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/RDoC_BetaSeries_Do_lssCorrelation_CW.m" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/RDoC_for_GitHub.Rproj" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/SEM.Rmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/calc_yeo_rest_conn.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/extract_Yeo_DMN.m" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/helper_fxns/calc_network_avg.R" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lssCorrelation_CW.m" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/p200_beta_series.Rmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pull_HPC_activity.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/raw_activity_to_csv.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scratch_notebook.Rmd" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils_isRSA_rest.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/EEG_reduced.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/EEG_reduced.Rmd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/EEG_reduced.html" beforeDir="false" afterPath="$PROJECT_DIR$/EEG_reduced.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/intertrial_similarity.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/intertrial_similarity.Rmd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/network_connectivity_analysis.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/network_connectivity_analysis.Rmd" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/p200_ISC.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_ISC.Rmd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/p200_time_course.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_time_course.Rmd" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils_ISC.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils_ISC.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/p200_beta_series.Rmd" beforeDir="false" afterPath="$PROJECT_DIR$/p200_beta_series.Rmd" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
